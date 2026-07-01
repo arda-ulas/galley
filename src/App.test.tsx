@@ -22,6 +22,12 @@ describe("App", () => {
     expect(screen.getByTitle("Lin · viewing")).toBeInTheDocument();
   });
 
+  it("renders exactly two presence avatars", () => {
+    render(<App />);
+
+    expect(screen.getAllByTitle(/·/)).toHaveLength(2);
+  });
+
   it("persists identity in sessionStorage", () => {
     render(<App />);
 

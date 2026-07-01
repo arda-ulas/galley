@@ -1,10 +1,4 @@
-type PresenceUser = {
-  id: string;
-  name: string;
-  color: string;
-  status: string;
-  isLocal?: boolean;
-};
+import type { PresenceUser } from "../lib/usePresence";
 
 type PresenceBarProps = {
   users: PresenceUser[];
