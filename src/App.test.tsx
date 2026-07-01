@@ -7,7 +7,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByText(/echo \/ demo/)).toBeInTheDocument();
-    expect(screen.getByText("Live")).toBeInTheDocument();
+    expect(screen.getByText(/Live|Connecting|Offline/)).toBeInTheDocument();
   });
 
   it("renders a local user avatar marked as You", () => {

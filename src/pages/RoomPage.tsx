@@ -4,6 +4,7 @@ import { EditorPlaceholder } from "../components/EditorPlaceholder";
 import { PresenceBar } from "../components/PresenceBar";
 import { TimelineScrubber } from "../components/TimelineScrubber";
 import { usePresence } from "../lib/usePresence";
+import { useProviderStatus } from "../lib/useProviderStatus";
 import { useSessionIdentity } from "../lib/useSessionIdentity";
 
 type RoomPageProps = {
@@ -21,10 +22,11 @@ const demoMarkers = [
 export function RoomPage({ roomId }: RoomPageProps) {
   const identity = useSessionIdentity();
   const users = usePresence(identity);
+  const connectionStatus = useProviderStatus();
 
   return (
     <AppShell
-      connection={<ConnectionStatus status="synced" />}
+      connection={<ConnectionStatus status={connectionStatus} />}
       presence={<PresenceBar users={users} />}
       roomId={roomId}
       timeline={<TimelineScrubber markers={demoMarkers} />}

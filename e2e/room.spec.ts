@@ -6,7 +6,7 @@ test("renders the amber room shell", async ({ page }) => {
   // Top-bar room label
   await expect(page.getByText(/echo \/ demo/)).toBeVisible();
 
-  // Connection status
+  // Connection status — Playwright starts the WS server, so this must reach Live
   await expect(page.getByText("Live")).toBeVisible();
 
   // Share button is present and interactive

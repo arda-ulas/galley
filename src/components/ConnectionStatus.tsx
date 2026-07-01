@@ -1,9 +1,9 @@
 type ConnectionStatusProps = {
-  status: "connecting" | "synced" | "offline";
+  status: "connecting" | "live" | "offline";
 };
 
 export function ConnectionStatus({ status }: ConnectionStatusProps) {
-  if (status === "synced") {
+  if (status === "live") {
     return (
       <div className="flex items-center gap-1.5 text-xs text-[var(--success)]">
         <span className="size-1.5 rounded-full bg-[var(--success)]" />
