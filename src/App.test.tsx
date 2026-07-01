@@ -16,16 +16,11 @@ describe("App", () => {
     expect(screen.getByTitle(/· You/)).toBeInTheDocument();
   });
 
-  it("renders the static demo collaborator", () => {
+  it("renders exactly one presence avatar in isolation (no real server in jsdom)", () => {
     render(<App />);
 
-    expect(screen.getByTitle("Lin · viewing")).toBeInTheDocument();
-  });
-
-  it("renders exactly two presence avatars", () => {
-    render(<App />);
-
-    expect(screen.getAllByTitle(/·/)).toHaveLength(2);
+    // Without a live WebSocket server, only the local user appears in awareness
+    expect(screen.getAllByTitle(/·/)).toHaveLength(1);
   });
 
   it("persists identity in sessionStorage", () => {
