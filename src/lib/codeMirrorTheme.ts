@@ -56,6 +56,14 @@ export const amberTheme = EditorView.theme(
       border: "1px solid #2A2318",
       color: "#D4C9B4",
     },
+    // y-codemirror.next remote cursor label — override serif default to match Amber mono aesthetic
+    ".cm-ySelectionInfo": {
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      fontSize: "10px",
+      letterSpacing: "0.02em",
+      borderRadius: "2px",
+      padding: "1px 4px",
+    },
   },
   { dark: true },
 );

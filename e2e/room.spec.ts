@@ -133,6 +133,52 @@ test("awareness cleanup: Page A drops to 1 avatar when Page B closes", async ({ 
   }
 });
 
+test("remote cursor: Page A renders Page B's cursor widget", async ({ browser }) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+
+  try {
+    const pageA = await ctxA.newPage();
+    const pageB = await ctxB.newPage();
+
+    await pageA.goto("/r/demo");
+    await pageB.goto("/r/demo");
+
+    // Both tabs must be live and synced before exercising cursors
+    await expect(pageA.getByText("Live")).toBeVisible();
+    await expect(pageB.getByText("Live")).toBeVisible();
+
+    // Type content in Page A so there is a shared Y.Text for cursors to live inside.
+    // y-codemirror.next encodes cursors as relative positions within the Y.Text — they
+    // resolve to null on the remote side if the Y.Text is empty.
+    const cursorToken = `cursor_test_${Date.now()}`;
+    await pageA.locator(".cm-content").click();
+    await pageA.keyboard.type(cursorToken);
+
+    // Wait for Page B to receive the content (confirms Y.Text is populated on both sides)
+    await expect(pageB.locator(".cm-content")).toContainText(cursorToken, {
+      timeout: 3000,
+    });
+
+    // Focus Page B's editor and move the cursor — this triggers the awareness cursor update.
+    // yRemoteSelections calls awareness.setLocalStateField('cursor', {anchor, head}) on every
+    // view update where the editor has focus, which broadcasts Page B's cursor to Page A.
+    await pageB.locator(".cm-content").click();
+    await pageB.keyboard.press("End"); // navigate without modifying content
+
+    // Page A must render Page B's remote cursor widget (.cm-ySelectionCaret is the span
+    // y-codemirror.next injects at the remote cursor position).
+    await expect(pageA.locator(".cm-ySelectionCaret")).toBeVisible({ timeout: 5000 });
+
+    // Presence bar must be unaffected: still 2 avatars, exactly 1 "You"
+    await expect(pageA.getByTitle(/·/)).toHaveCount(2);
+    await expect(pageA.getByTitle(/· You/)).toHaveCount(1);
+  } finally {
+    await ctxA.close();
+    await ctxB.close();
+  }
+});
+
 test("does not render stale placeholder copy", async ({ page }) => {
   await page.goto("/r/demo");
 
