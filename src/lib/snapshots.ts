@@ -37,7 +37,8 @@ export function createSnapshotRecorder(
     ]);
   }
 
-  function onTextChange() {
+  function onTextChange(_event: Y.YTextEvent, transaction: Y.Transaction) {
+    if (!transaction.local) return;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(captureSnapshot, idleMs);
   }

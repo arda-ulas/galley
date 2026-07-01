@@ -104,6 +104,56 @@ describe("createSnapshotRecorder", () => {
     vi.advanceTimersByTime(SNAPSHOT_IDLE_MS);
     expect(ySnapshots.length).toBe(0);
   });
+
+  it("does not create snapshots for mutations after cleanup (observer removed)", () => {
+    cleanup = createSnapshotRecorder(ytext, ySnapshots);
+
+    ytext.insert(0, "before cleanup");
+    cleanup();
+    cleanup = () => {};
+
+    // Pending timer was cancelled — no snapshot
+    vi.advanceTimersByTime(SNAPSHOT_IDLE_MS);
+    expect(ySnapshots.length).toBe(0);
+
+    // Further mutations after cleanup must also not create snapshots
+    ytext.insert(ytext.length, " and more");
+    vi.advanceTimersByTime(SNAPSHOT_IDLE_MS);
+    expect(ySnapshots.length).toBe(0);
+  });
+
+  it("remote text transactions do not schedule a snapshot in the receiving doc", () => {
+    // Two docs representing two connected clients with bidirectional sync
+    const docA = new Y.Doc();
+    const docB = new Y.Doc();
+
+    docA.on("update", (update: Uint8Array) => Y.applyUpdate(docB, update));
+    docB.on("update", (update: Uint8Array) => Y.applyUpdate(docA, update));
+
+    const ytextA = docA.getText("content");
+    const ytextB = docB.getText("content");
+    const ySnapshotsA = docA.getArray<Snapshot>("snapshots");
+    const ySnapshotsB = docB.getArray<Snapshot>("snapshots");
+
+    const cleanupA = createSnapshotRecorder(ytextA, ySnapshotsA);
+    const cleanupB = createSnapshotRecorder(ytextB, ySnapshotsB);
+
+    try {
+      // Edit in docA — local to A, remote to B
+      ytextA.insert(0, "hello from A");
+      vi.advanceTimersByTime(SNAPSHOT_IDLE_MS);
+
+      // Only docA's recorder fires. Its snapshot syncs to docB via the update
+      // listener above, so both arrays reflect exactly one snapshot — not two.
+      expect(ySnapshotsA.length).toBe(1);
+      expect(ySnapshotsB.length).toBe(1);
+      expect(ySnapshotsA.get(0).id).toBe(ySnapshotsB.get(0).id);
+      expect(ySnapshotsA.get(0).text).toBe("hello from A");
+    } finally {
+      cleanupA();
+      cleanupB();
+    }
+  });
 });
 
 // ─── useSnapshots ─────────────────────────────────────────────────────────────
