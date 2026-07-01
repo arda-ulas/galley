@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { AppShell } from "../components/AppShell";
 import { CollaborativeEditor } from "../components/CollaborativeEditor";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { PresenceBar } from "../components/PresenceBar";
 import { TimelineScrubber } from "../components/TimelineScrubber";
+import { doc } from "../lib/room";
+import { createSnapshotRecorder } from "../lib/snapshots";
 import { usePresence } from "../lib/usePresence";
 import { useProviderStatus } from "../lib/useProviderStatus";
 import { useSessionIdentity } from "../lib/useSessionIdentity";
@@ -23,6 +26,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const identity = useSessionIdentity();
   const users = usePresence(identity);
   const connectionStatus = useProviderStatus();
+
+  useEffect(() => {
+    return createSnapshotRecorder(
+      doc.getText("content"),
+      doc.getArray("snapshots"),
+    );
+  }, []);
 
   return (
     <AppShell
