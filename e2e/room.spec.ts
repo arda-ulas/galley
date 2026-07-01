@@ -306,6 +306,10 @@ test("timeline: snapshot marker appears after typing pause", async ({
   await page.goto("/r/demo");
   await expect(page.getByText("Live")).toBeVisible();
 
+  // Confirm no marker exists before typing — proves the marker is created by
+  // the snapshot recorder, not carried over from a prior static state.
+  await expect(page.getByTestId("timeline-marker")).toHaveCount(0);
+
   // Type something unique so the snapshot recorder has non-empty text to capture
   await page.locator(".cm-content").click();
   await page.keyboard.type(`tl_${Date.now()}`);

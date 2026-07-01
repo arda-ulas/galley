@@ -46,7 +46,7 @@ export function TimelineScrubber({ markers }: TimelineScrubberProps) {
           return (
             <motion.div
               animate={{ opacity: 1, scale: 1 }}
-              className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer"
+              className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full"
               data-testid="timeline-marker"
               initial={{ opacity: 0, scale: 0.5 }}
               key={marker.id}
