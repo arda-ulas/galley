@@ -1,0 +1,20 @@
+:root {
+  color-scheme: dark;
+  --bg: #07090d;
+  --panel: #0d1118;
+  --panel-strong: #121824;
+  --border: #253044;
+  --border-subtle: rgba(139, 152, 170, 0.18);
+  --text: #e8eef8;
+  --muted: #8b98aa;
+  --accent: #73d7ff;
+  --past: #f5b66d;
+  --success: #6ee7b7;
+  --danger: #fb7185;
+  --editor-bg: #090d13;
+  --editor-text: #d7e1ef;
+  --editor-line: #465367;
+  --timeline-bg: #0a0f17;
+  --presence-blue: #73d7ff;
+  --presence-gold: #f5b66d;
+}
