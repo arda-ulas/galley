@@ -36,6 +36,7 @@ export function AppShell({ roomId, connection, presence, timeline, children }: A
             <button
               className="rounded border border-[var(--border)] px-2 py-0.5 font-mono text-[10px] text-[var(--muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
               onClick={handleShare}
+              type="button"
             >
               {copied ? "Copied" : "Share"}
             </button>

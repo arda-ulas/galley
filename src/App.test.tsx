@@ -10,10 +10,29 @@ describe("App", () => {
     expect(screen.getByText("Live")).toBeInTheDocument();
   });
 
-  it("renders presence avatars for demo users", () => {
+  it("renders a local user avatar marked as You", () => {
     render(<App />);
 
-    expect(screen.getByTitle("Ada · editing")).toBeInTheDocument();
+    expect(screen.getByTitle(/· You/)).toBeInTheDocument();
+  });
+
+  it("renders the static demo collaborator", () => {
+    render(<App />);
+
     expect(screen.getByTitle("Lin · viewing")).toBeInTheDocument();
+  });
+
+  it("persists identity in sessionStorage", () => {
+    render(<App />);
+
+    const stored = sessionStorage.getItem("echo-rewind:identity");
+    expect(stored).not.toBeNull();
+
+    const parsed = JSON.parse(stored!) as unknown;
+    expect(parsed).toMatchObject({
+      id: expect.any(String),
+      name: expect.any(String),
+      color: expect.any(String),
+    });
   });
 });
