@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Snapshot } from "./snapshots";
-import { snapshotsToMarkers } from "./timeline";
+import { nearestMarkerForPosition, snapshotsToMarkers } from "./timeline";
+import type { TimelineMarker } from "./timeline";
+
+function tm(id: string, position: number): TimelineMarker {
+  return { id, position, createdAt: 0 };
+}
 
 function snap(id: string, createdAt: number): Snapshot {
   return { id, text: "x", createdAt };
@@ -56,5 +61,30 @@ describe("snapshotsToMarkers", () => {
     const result = snapshotsToMarkers([snap("a", 1000), snap("b", 1000)]);
     expect(result).toHaveLength(2);
     result.forEach((m) => expect(Number.isFinite(m.position)).toBe(true));
+  });
+});
+
+describe("nearestMarkerForPosition", () => {
+  it("returns null for an empty array", () => {
+    expect(nearestMarkerForPosition([], 50)).toBeNull();
+  });
+
+  it("returns the sole marker for any click position", () => {
+    const result = nearestMarkerForPosition([tm("only", 80)], 10);
+    expect(result?.id).toBe("only");
+  });
+
+  it("returns the closer of two markers", () => {
+    const markers = [tm("left", 20), tm("right", 70)];
+    // click at 30% — distance to left(20)=10, distance to right(70)=40 → left wins
+    expect(nearestMarkerForPosition(markers, 30)?.id).toBe("left");
+    // click at 60% — distance to left(20)=40, distance to right(70)=10 → right wins
+    expect(nearestMarkerForPosition(markers, 60)?.id).toBe("right");
+  });
+
+  it("returns the first marker when equidistant (stable reduce)", () => {
+    const markers = [tm("a", 30), tm("b", 70)];
+    // click at exactly 50% — both are 20 away; reduce keeps the first best
+    expect(nearestMarkerForPosition(markers, 50)?.id).toBe("a");
   });
 });

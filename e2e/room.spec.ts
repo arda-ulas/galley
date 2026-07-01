@@ -321,6 +321,51 @@ test("timeline: snapshot marker appears after typing pause", async ({
   });
 });
 
+// ─── Step 17: rail-click nearest-snapshot selection ──────────────────────────
+
+test("timeline: clicking rail enters past preview for nearest snapshot", async ({
+  page,
+}) => {
+  await page.goto("/r/demo");
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Type tokenA and wait for the snapshot marker to commit
+  const tokenA = `rail_a_${Date.now()}`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(tokenA);
+  await expect(page.getByTestId("timeline-marker").first()).toBeVisible({
+    timeout: 5000,
+  });
+
+  // Type tokenB immediately — it will only be in the live document, not the snapshot
+  const tokenB = `rail_b_${Date.now()}`;
+  await page.keyboard.type(tokenB);
+
+  // Click the rail at 10% from the left — the only snapshot (at 80%) is still nearest
+  const rail = page.getByTestId("timeline-rail");
+  const railBox = await rail.boundingBox();
+  expect(railBox).not.toBeNull();
+  await rail.click({
+    position: { x: Math.floor(railBox!.width * 0.1), y: railBox!.height / 2 },
+  });
+
+  // Past pill must appear
+  await expect(page.getByText("Viewing the past")).toBeVisible();
+  await expect(page.getByTestId("return-to-now")).toBeVisible();
+
+  // Past editor shows tokenA (from snapshot) but not tokenB (live only)
+  const pastText = await getEditorText(page);
+  expect(pastText).toContain(tokenA);
+  expect(pastText).not.toContain(tokenB);
+
+  // Return to now restores live editor with tokenB
+  await page.getByTestId("return-to-now").click();
+  await expect(page.getByText("Viewing the past")).not.toBeVisible();
+  await expect
+    .poll(() => getEditorText(page), { timeout: 3000 })
+    .toContain(tokenB);
+});
+
 // ─── Step 15: past preview mode ──────────────────────────────────────────────
 
 test("past mode: click marker enters read-only past preview", async ({

@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
 import type { TimelineMarker } from "../lib/timeline";
+import { nearestMarkerForPosition } from "../lib/timeline";
 
 type TimelineScrubberProps = {
   markers: TimelineMarker[];
   selectedMarkerId?: string;
   onMarkerClick?: (id: string) => void;
+  onSelectNearest?: (id: string) => void;
 };
 
 const TICK_COUNT = 9;
@@ -20,11 +22,26 @@ export function TimelineScrubber({
   markers,
   selectedMarkerId,
   onMarkerClick,
+  onSelectNearest,
 }: TimelineScrubberProps) {
+  function handleRailClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (markers.length === 0 || !onSelectNearest) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const clickPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const nearest = nearestMarkerForPosition(markers, clickPct);
+    if (nearest) onSelectNearest(nearest.id);
+  }
+
   return (
     <div className="relative h-full flex items-center px-4 gap-4 bg-[var(--timeline-bg)]">
       {/* Rail + ticks + markers */}
-      <div className="relative flex-1 h-8">
+      <div
+        className="relative flex-1 h-8"
+        data-testid="timeline-rail"
+        onClick={handleRailClick}
+        style={{ cursor: markers.length > 0 && onSelectNearest ? "pointer" : "default" }}
+      >
         {/* Amber rail */}
         <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--border)]" />
         <div
@@ -61,7 +78,7 @@ export function TimelineScrubber({
               data-testid="timeline-marker"
               initial={{ opacity: 0 }}
               key={marker.id}
-              onClick={() => onMarkerClick?.(marker.id)}
+              onClick={(e) => { e.stopPropagation(); onMarkerClick?.(marker.id); }}
               style={{ left: `${marker.position}%` }}
               title={label}
               transition={{ duration: 0.2 }}

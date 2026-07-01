@@ -101,4 +101,52 @@ describe("TimelineScrubber", () => {
     expect(first).not.toHaveAttribute("aria-current");
     expect(second).toHaveAttribute("aria-current", "true");
   });
+
+  // ── Rail-click / nearest selection ────────────────────────────────────────
+
+  it("calls onSelectNearest with the nearest marker id when rail is clicked", () => {
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("left", 20), marker("right", 70)]}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+
+    const rail = screen.getByTestId("timeline-rail");
+    // Simulate a 400px-wide rail so we can compute a meaningful click percentage
+    vi.spyOn(rail, "getBoundingClientRect").mockReturnValue({
+      left: 0, right: 400, width: 400,
+      top: 0, bottom: 32, height: 32,
+      x: 0, y: 0, toJSON: () => ({}),
+    });
+
+    // clientX=60 → 15% along rail; left(20%) is closer than right(70%)
+    fireEvent.click(rail, { clientX: 60 });
+    expect(onSelectNearest).toHaveBeenCalledOnce();
+    expect(onSelectNearest).toHaveBeenCalledWith("left");
+  });
+
+  it("does not call onSelectNearest when rail has no markers", () => {
+    const onSelectNearest = vi.fn();
+    render(<TimelineScrubber markers={[]} onSelectNearest={onSelectNearest} />);
+    fireEvent.click(screen.getByTestId("timeline-rail"));
+    expect(onSelectNearest).not.toHaveBeenCalled();
+  });
+
+  it("marker click fires onMarkerClick but not onSelectNearest", () => {
+    const onMarkerClick = vi.fn();
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("m", 40)]}
+        onMarkerClick={onMarkerClick}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("timeline-marker"));
+    expect(onMarkerClick).toHaveBeenCalledWith("m");
+    expect(onSelectNearest).not.toHaveBeenCalled();
+  });
 });

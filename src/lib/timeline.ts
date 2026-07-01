@@ -6,6 +6,22 @@ export type TimelineMarker = {
   createdAt: number;
 };
 
+/**
+ * Returns the marker whose position (0–100) is closest to clickPct.
+ * Returns null for an empty array.
+ */
+export function nearestMarkerForPosition(
+  markers: TimelineMarker[],
+  clickPct: number,
+): TimelineMarker | null {
+  if (markers.length === 0) return null;
+  return markers.reduce((best, m) =>
+    Math.abs(m.position - clickPct) < Math.abs(best.position - clickPct)
+      ? m
+      : best,
+  );
+}
+
 const MIN_POS = 5;
 const MAX_POS = 88;
 const MAX_MARKERS = 30;
