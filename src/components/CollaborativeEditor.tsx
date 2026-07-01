@@ -8,7 +8,7 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
-import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
 import { useEffect, useRef } from "react";
@@ -21,42 +21,36 @@ export function CollaborativeEditor() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    let view: EditorView | undefined;
-    try {
-      const state = EditorState.create({
-        doc: editorSeed,
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          highlightActiveLine(),
-          history(),
-          drawSelection(),
-          indentOnInput(),
-          bracketMatching(),
-          closeBrackets(),
-          keymap.of([
-            ...closeBracketsKeymap,
-            ...defaultKeymap,
-            ...historyKeymap,
-            ...completionKeymap,
-            indentWithTab,
-          ]),
-          javascript({ typescript: true }),
-          amberExtensions,
-          amberTheme,
-        ],
-      });
+    const state = EditorState.create({
+      doc: editorSeed,
+      extensions: [
+        lineNumbers(),
+        highlightActiveLineGutter(),
+        highlightActiveLine(),
+        history(),
+        drawSelection(),
+        indentOnInput(),
+        bracketMatching(),
+        closeBrackets(),
+        keymap.of([
+          ...closeBracketsKeymap,
+          ...defaultKeymap,
+          ...historyKeymap,
+          indentWithTab,
+        ]),
+        javascript({ typescript: true }),
+        amberExtensions,
+        amberTheme,
+      ],
+    });
 
-      view = new EditorView({
-        state,
-        parent: containerRef.current,
-      });
-    } catch {
-      // EditorView can fail in non-browser environments (e.g. jsdom in unit tests).
-    }
+    const view = new EditorView({
+      state,
+      parent: containerRef.current,
+    });
 
     return () => {
-      view?.destroy();
+      view.destroy();
     };
   }, []);
 

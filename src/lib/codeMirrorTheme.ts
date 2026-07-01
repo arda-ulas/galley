@@ -56,9 +56,6 @@ export const amberTheme = EditorView.theme(
       border: "1px solid #2A2318",
       color: "#D4C9B4",
     },
-    ".cm-tooltip-autocomplete ul li[aria-selected]": {
-      backgroundColor: "rgba(245, 166, 35, 0.15)",
-    },
   },
   { dark: true },
 );

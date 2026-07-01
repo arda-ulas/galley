@@ -20,6 +20,17 @@ test("renders the amber room shell", async ({ page }) => {
   await expect(page.locator("footer").getByText("now", { exact: true })).toBeVisible();
 });
 
+test("CodeMirror editor mounts and renders seed code", async ({ page }) => {
+  await page.goto("/r/demo");
+
+  // CodeMirror root and content layer must be visible
+  await expect(page.locator(".cm-editor")).toBeVisible();
+  await expect(page.locator(".cm-content")).toBeVisible();
+
+  // Seed text must be rendered — captureSnapshot is a unique function name in editorSeed
+  await expect(page.locator(".cm-content").getByText("captureSnapshot", { exact: false })).toBeVisible();
+});
+
 test("does not render stale placeholder copy", async ({ page }) => {
   await page.goto("/r/demo");
 
