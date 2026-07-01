@@ -80,11 +80,15 @@ Decisions are recorded here when they have a non-obvious rationale or when a rea
 
 ---
 
-## D-009 — Seed starter code only on empty document
+## D-009 — Seed starter code server-side at room creation time
 
-**Decision**: Insert the starter TypeScript snippet only when `doc.getText('content').toString() === ''`.
+**Decision**: The starter TypeScript snippet is inserted into `Y.Text("content")` by the server (`server/index.mjs`) inside `getRoom()`, atomically when the room is first created. No client-side seeding.
 
-**Reason**: Prevents overwriting content when a second tab joins a room that already has text. The check must happen after the WebSocket provider syncs (after the `synced` event), not on initial mount.
+**Rejected alternative**: Client-side seeding after the `synced` event — the first tab to connect checks `doc.getText('content').toString() === ''` and inserts the seed. This is a race: two tabs opening simultaneously can both observe an empty `Y.Text` before either has applied its insert, causing the seed to appear twice.
+
+**Reason**: Node.js is single-threaded. `getRoom()` is called synchronously on each WebSocket connection. The first call creates the room and applies the seed; every subsequent call returns the already-seeded room. No two concurrent connections can both observe an empty room. This guarantees exactly one insertion regardless of how many tabs open simultaneously.
+
+**Canonical source**: `src/lib/editorSeed.ts` exports the `STARTER_CODE` constant. `server/index.mjs` imports and seeds it at room creation time. These two must be kept in sync.
 
 ---
 

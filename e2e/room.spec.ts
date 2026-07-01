@@ -494,3 +494,79 @@ test("past mode: click marker enters read-only past preview", async ({
   // The text typed in past mode must not have leaked into the live document.
   expect(await getEditorText(page)).not.toContain("should_not_appear");
 });
+
+test("past mode: Tab A views past locally while Tab B edits live; Return to now picks up Tab B edits", async ({ browser }) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+
+  try {
+    const pageA = await ctxA.newPage();
+    const pageB = await ctxB.newPage();
+
+    await pageA.goto("/r/demo");
+    await pageB.goto("/r/demo");
+
+    // Both tabs must reach Live status before testing
+    await expect(pageA.getByText("Live")).toBeVisible();
+    await expect(pageB.getByText("Live")).toBeVisible();
+
+    // Step 3: Type tokenA in Tab A
+    const tokenA = `past_iso_a_${Date.now()}`;
+    await pageA.locator(".cm-content").click();
+    await pageA.keyboard.type(tokenA);
+
+    // Step 4: Wait for the first snapshot marker (tokenA is now committed to a snapshot)
+    await expect(pageA.getByTestId("timeline-marker").first()).toBeVisible({ timeout: 6000 });
+
+    // Step 5: Type tokenB immediately — live-only; no pause so a second snapshot
+    // won't fire before we enter past mode (marker appeared → tokenA's snapshot exists)
+    const tokenB = `past_iso_b_${Date.now()}`;
+    await pageA.keyboard.type(tokenB);
+
+    // Step 6: Enter past mode in Tab A — click the first timeline marker
+    await pageA.getByTestId("timeline-marker").first().click();
+
+    // Step 7: Verify Tab A is in past mode
+    await expect(pageA.getByText("Viewing the past")).toBeVisible();
+    await expect(pageA.getByTestId("return-to-now")).toBeVisible();
+
+    // Past editor shows tokenA (from snapshot) but not tokenB (live only)
+    const pastText = await getEditorText(pageA);
+    expect(pastText).toContain(tokenA);
+    expect(pastText).not.toContain(tokenB);
+
+    // Editor is read-only in past mode
+    const contentEditableInPast = await pageA.evaluate(() =>
+      document.querySelector(".cm-content")?.getAttribute("contenteditable"),
+    );
+    expect(contentEditableInPast).toBe("false");
+
+    // Step 8: While Tab A is in past mode, type tokenC in Tab B
+    const tokenC = `TAB_B_EDIT_WHILE_A_IN_PAST_${Date.now()}`;
+    await pageB.locator(".cm-content").click();
+    await pageB.keyboard.type(tokenC);
+
+    // Step 9: Confirm Tab B is still live — past mode is local-only
+    await expect(pageB.getByText("Live")).toBeVisible();
+
+    // Step 10: Return Tab A to now
+    await pageA.getByTestId("return-to-now").click();
+
+    // Step 11: Verify Tab A after returning to now
+    await expect(pageA.getByText("Viewing the past")).not.toBeVisible();
+
+    // Editor is editable again
+    const contentEditableAfterReturn = await pageA.evaluate(() =>
+      document.querySelector(".cm-content")?.getAttribute("contenteditable"),
+    );
+    expect(contentEditableAfterReturn).toBe("true");
+
+    // Tab A picks up Tab B's live edit — use expect.poll because Yjs sync is async
+    await expect
+      .poll(() => getEditorText(pageA), { timeout: 4000 })
+      .toContain(tokenC);
+  } finally {
+    await ctxA.close();
+    await ctxB.close();
+  }
+});

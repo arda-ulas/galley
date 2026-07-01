@@ -6,7 +6,7 @@ export const doc = new Y.Doc();
 // connect: false — connection is started explicitly via connectRoom().
 // This avoids eager WebSocket instantiation before the component mounts.
 export const provider = new WebsocketProvider(
-  'ws://localhost:1234',
+  'ws://127.0.0.1:1234',
   'demo',
   doc,
   { connect: false },
