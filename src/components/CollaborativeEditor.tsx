@@ -62,7 +62,11 @@ export function CollaborativeEditor({
         javascript({ typescript: true }),
         amberExtensions,
         pastSnapshot
-          ? [amberPastTheme, EditorState.readOnly.of(true)]
+          ? [
+              amberPastTheme,
+              EditorState.readOnly.of(true),
+              EditorView.editable.of(false),
+            ]
           : [amberTheme, yCollab(ytext, provider.awareness, { undoManager: false })],
       ],
     });
@@ -74,6 +78,12 @@ export function CollaborativeEditor({
 
     return () => {
       view.destroy();
+      // Clear only the cursor field so other tabs stop rendering this tab's
+      // stale cursor while it views the past. The `user` field (presence
+      // identity) is left intact and continues broadcasting.
+      if (!pastSnapshot) {
+        provider.awareness.setLocalStateField("cursor", null);
+      }
     };
     // pastSnapshot object is stable in state between re-renders; snapshotId
     // is the primitive dep that captures enter/exit/switch events.

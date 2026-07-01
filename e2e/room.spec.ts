@@ -372,4 +372,7 @@ test("past mode: click marker enters read-only past preview", async ({
   await expect
     .poll(() => getEditorText(page), { timeout: 3000 })
     .toContain(tokenB);
+
+  // The text typed in past mode must not have leaked into the live document.
+  expect(await getEditorText(page)).not.toContain("should_not_appear");
 });
