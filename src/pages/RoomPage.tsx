@@ -1,6 +1,6 @@
 import { AppShell } from "../components/AppShell";
+import { CollaborativeEditor } from "../components/CollaborativeEditor";
 import { ConnectionStatus } from "../components/ConnectionStatus";
-import { EditorPlaceholder } from "../components/EditorPlaceholder";
 import { PresenceBar } from "../components/PresenceBar";
 import { TimelineScrubber } from "../components/TimelineScrubber";
 import { usePresence } from "../lib/usePresence";
@@ -31,7 +31,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       roomId={roomId}
       timeline={<TimelineScrubber markers={demoMarkers} />}
     >
-      <EditorPlaceholder />
+      <CollaborativeEditor />
     </AppShell>
   );
 }

@@ -16,8 +16,8 @@ test("renders the amber room shell", async ({ page }) => {
   await expect(page.getByTitle(/· You/)).toBeVisible();
   await expect(page.getByTitle("Lin · viewing")).toBeVisible();
 
-  // Timeline "now" indicator (exact match avoids collision with Date.now() in editor code)
-  await expect(page.getByText("now", { exact: true })).toBeVisible();
+  // Timeline "now" indicator — scoped to footer to avoid collision with Date.now() tokens in editor
+  await expect(page.locator("footer").getByText("now", { exact: true })).toBeVisible();
 });
 
 test("does not render stale placeholder copy", async ({ page }) => {
