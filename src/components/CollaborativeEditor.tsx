@@ -13,25 +13,39 @@ import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
 import { useEffect, useRef } from "react";
 import { yCollab } from "y-codemirror.next";
+import type { Snapshot } from "../lib/snapshots";
 import { doc, provider, connectRoom } from "../lib/room";
-import { amberExtensions, amberTheme } from "../lib/codeMirrorTheme";
+import {
+  amberExtensions,
+  amberPastTheme,
+  amberTheme,
+} from "../lib/codeMirrorTheme";
 
-export function CollaborativeEditor() {
+type CollaborativeEditorProps = {
+  pastSnapshot?: Snapshot | null;
+};
+
+export function CollaborativeEditor({
+  pastSnapshot = null,
+}: CollaborativeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Re-create the CodeMirror view whenever the viewed snapshot changes.
+  // Using the id (or null) as the dep signal means we rebuild exactly once
+  // per mode switch, not on every RoomPage re-render.
+  const snapshotId = pastSnapshot?.id ?? null;
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    connectRoom();
-
     const ytext = doc.getText("content");
 
+    if (!pastSnapshot) {
+      connectRoom();
+    }
+
     const state = EditorState.create({
-      // Initialize from Y.Text so CM and Yjs share the same starting content.
-      // If Y.Text is empty (first tab before sync), CM starts empty too.
-      // When sync completes and Y.Text receives content, the yCollab observer
-      // fires and CM updates automatically.
-      doc: ytext.toString(),
+      doc: pastSnapshot ? pastSnapshot.text : ytext.toString(),
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -47,12 +61,9 @@ export function CollaborativeEditor() {
         ]),
         javascript({ typescript: true }),
         amberExtensions,
-        amberTheme,
-        // Sync CM ↔ Y.Text with full awareness: text sync + remote cursor/selection rendering.
-        // yRemoteSelections reads state.user.{color,name} (set by usePresence) and writes
-        // state.cursor independently — no conflict with the presence awareness field.
-        // undoManager: false = native CM history is intentionally omitted.
-        yCollab(ytext, provider.awareness, { undoManager: false }),
+        pastSnapshot
+          ? [amberPastTheme, EditorState.readOnly.of(true)]
+          : [amberTheme, yCollab(ytext, provider.awareness, { undoManager: false })],
       ],
     });
 
@@ -64,7 +75,10 @@ export function CollaborativeEditor() {
     return () => {
       view.destroy();
     };
-  }, []);
+    // pastSnapshot object is stable in state between re-renders; snapshotId
+    // is the primitive dep that captures enter/exit/switch events.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshotId]);
 
   return <div ref={containerRef} className="h-full min-h-0 overflow-hidden" />;
 }

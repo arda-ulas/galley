@@ -6,23 +6,36 @@ type AppShellProps = {
   connection: ReactNode;
   presence: ReactNode;
   timeline: ReactNode;
+  isPast?: boolean;
   children: ReactNode;
 };
 
-export function AppShell({ roomId, connection, presence, timeline, children }: AppShellProps) {
+export function AppShell({
+  roomId,
+  connection,
+  presence,
+  timeline,
+  isPast = false,
+  children,
+}: AppShellProps) {
   const [copied, setCopied] = useState(false);
 
   function handleShare() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
   }
 
   return (
     <>
       <div className="flex lg:hidden h-dvh items-center justify-center bg-[var(--bg)]">
-        <span className="text-sm text-[var(--muted)]">Best viewed on desktop</span>
+        <span className="text-sm text-[var(--muted)]">
+          Best viewed on desktop
+        </span>
       </div>
 
       <main className="hidden lg:grid h-dvh overflow-hidden grid-rows-[36px_1fr_52px] bg-[var(--bg)] text-[var(--text)]">
@@ -43,7 +56,11 @@ export function AppShell({ roomId, connection, presence, timeline, children }: A
           </div>
         </header>
 
-        <section className="min-h-0 overflow-hidden bg-[var(--editor-bg)]">
+        <section
+          className={`min-h-0 overflow-hidden transition-colors duration-700 ${
+            isPast ? "bg-[var(--past-bg)]" : "bg-[var(--editor-bg)]"
+          }`}
+        >
           {children}
         </section>
 

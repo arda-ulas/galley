@@ -99,3 +99,41 @@ const amberHighlightStyle = HighlightStyle.define([
 ]);
 
 export const amberExtensions = syntaxHighlighting(amberHighlightStyle);
+
+// Used when CollaborativeEditor is in past preview mode.
+// Shifts the background to --past-bg (#08090F) and removes the edit caret
+// so the visual temperature communicates "read-only historical view."
+export const amberPastTheme = EditorView.theme(
+  {
+    "&": {
+      height: "100%",
+      fontSize: "13px",
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      backgroundColor: "#08090F",
+      color: "#D4C9B4",
+    },
+    ".cm-scroller": {
+      overflow: "auto",
+      fontFamily: "inherit",
+    },
+    ".cm-content": {
+      caretColor: "transparent",
+      padding: "16px 0",
+    },
+    ".cm-gutters": {
+      backgroundColor: "#08090F",
+      color: "#252535",
+      border: "none",
+      borderRight: "1px solid #1A1A28",
+    },
+    ".cm-lineNumbers .cm-gutterElement": {
+      paddingLeft: "8px",
+      paddingRight: "12px",
+      color: "#252535",
+      minWidth: "3ch",
+    },
+    ".cm-activeLine": { backgroundColor: "transparent" },
+    ".cm-activeLineGutter": { backgroundColor: "transparent" },
+  },
+  { dark: true },
+);

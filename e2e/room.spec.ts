@@ -320,3 +320,56 @@ test("timeline: snapshot marker appears after typing pause", async ({
     timeout: 5000,
   });
 });
+
+// ─── Step 15: past preview mode ──────────────────────────────────────────────
+
+test("past mode: click marker enters read-only past preview", async ({
+  page,
+}) => {
+  await page.goto("/r/demo");
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Phase 1: type tokenA and wait for its snapshot marker to appear.
+  // The marker appearing confirms the first snapshot was committed to the
+  // Y.Array — that snapshot's text contains tokenA but not tokenB.
+  const tokenA = `past_a_${Date.now()}`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(tokenA);
+
+  const firstMarker = page.getByTestId("timeline-marker").first();
+  await expect(firstMarker).toBeVisible({ timeout: 5000 });
+
+  // Phase 2: type tokenB immediately (no pause so the first snapshot is already
+  // committed with only tokenA in it, and tokenB is only in the live text).
+  const tokenB = `past_b_${Date.now()}`;
+  await page.keyboard.type(tokenB);
+
+  // Phase 3: click the first marker to enter past preview.
+  await firstMarker.click();
+
+  // Past pill must be visible with the mode label and the exit button.
+  await expect(page.getByText("Viewing the past")).toBeVisible();
+  await expect(page.getByTestId("return-to-now")).toBeVisible();
+
+  // Editor shows the older snapshot: tokenA present, tokenB absent.
+  const pastText = await getEditorText(page);
+  expect(pastText).toContain(tokenA);
+  expect(pastText).not.toContain(tokenB);
+
+  // Editor is read-only: typing should not change the displayed text.
+  await page.locator(".cm-content").click();
+  await page.keyboard.type("should_not_appear");
+  const afterTypeText = await getEditorText(page);
+  expect(afterTypeText).not.toContain("should_not_appear");
+
+  // Phase 4: exit past mode via Return to now.
+  await page.getByTestId("return-to-now").click();
+
+  // Pill gone and live editor restored.
+  await expect(page.getByText("Viewing the past")).not.toBeVisible();
+
+  // Live editor shows the full current content including tokenB.
+  await expect
+    .poll(() => getEditorText(page), { timeout: 3000 })
+    .toContain(tokenB);
+});

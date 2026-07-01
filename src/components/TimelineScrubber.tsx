@@ -3,6 +3,8 @@ import type { TimelineMarker } from "../lib/timeline";
 
 type TimelineScrubberProps = {
   markers: TimelineMarker[];
+  selectedMarkerId?: string;
+  onMarkerClick?: (id: string) => void;
 };
 
 const TICK_COUNT = 9;
@@ -14,7 +16,11 @@ function formatRelative(ms: number): string {
   return `${Math.floor(delta / 3_600_000)}h ago`;
 }
 
-export function TimelineScrubber({ markers }: TimelineScrubberProps) {
+export function TimelineScrubber({
+  markers,
+  selectedMarkerId,
+  onMarkerClick,
+}: TimelineScrubberProps) {
   return (
     <div className="relative h-full flex items-center px-4 gap-4 bg-[var(--timeline-bg)]">
       {/* Rail + ticks + markers */}
@@ -41,19 +47,26 @@ export function TimelineScrubber({ markers }: TimelineScrubberProps) {
 
         {/* Snapshot markers */}
         {markers.map((marker, i) => {
+          const isSelected = marker.id === selectedMarkerId;
           const color =
             i % 2 === 0 ? "var(--accent)" : "var(--presence-teal)";
           return (
             <motion.div
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              animate={{ opacity: 1, scale: isSelected ? 1.5 : 1 }}
+              className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer"
+              data-selected={isSelected ? "true" : undefined}
               data-testid="timeline-marker"
               initial={{ opacity: 0, scale: 0.5 }}
               key={marker.id}
+              onClick={() => onMarkerClick?.(marker.id)}
               style={{
                 left: `${marker.position}%`,
                 background: color,
-                boxShadow: `0 0 6px ${color}`,
+                outline: isSelected ? "2px solid var(--past)" : "none",
+                outlineOffset: "2px",
+                boxShadow: isSelected
+                  ? `0 0 12px ${color}`
+                  : `0 0 6px ${color}`,
               }}
               title={formatRelative(marker.createdAt)}
               transition={{ duration: 0.2 }}
