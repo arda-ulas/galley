@@ -149,4 +149,73 @@ describe("TimelineScrubber", () => {
     expect(onMarkerClick).toHaveBeenCalledWith("m");
     expect(onSelectNearest).not.toHaveBeenCalled();
   });
+
+  // ── Pointer drag ──────────────────────────────────────────────────────────
+
+  function mockRailRect(rail: HTMLElement) {
+    vi.spyOn(rail, "getBoundingClientRect").mockReturnValue({
+      left: 0, right: 400, width: 400,
+      top: 0, bottom: 32, height: 32,
+      x: 0, y: 0, toJSON: () => ({}),
+    });
+  }
+
+  it("pointer down on rail immediately selects nearest marker", () => {
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("left", 20), marker("right", 70)]}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    mockRailRect(rail);
+
+    // clientX=60 → 15% along 400px rail; left(20%) closer than right(70%)
+    fireEvent.pointerDown(rail, { clientX: 60, pointerId: 1 });
+    expect(onSelectNearest).toHaveBeenCalledOnce();
+    expect(onSelectNearest).toHaveBeenCalledWith("left");
+  });
+
+  it("pointer up stops drag — subsequent pointer move is ignored", () => {
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("a", 30), marker("b", 70)]}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    mockRailRect(rail);
+
+    fireEvent.pointerDown(rail, { clientX: 100, pointerId: 1 }); // selects "a" at 30%
+    fireEvent.pointerUp(rail, { pointerId: 1 });
+    fireEvent.pointerMove(rail, { clientX: 300, pointerId: 1 }); // ignored — not dragging
+    expect(onSelectNearest).toHaveBeenCalledTimes(1);
+    expect(onSelectNearest).toHaveBeenCalledWith("a");
+  });
+
+  it("pointer down on empty rail does nothing", () => {
+    const onSelectNearest = vi.fn();
+    render(<TimelineScrubber markers={[]} onSelectNearest={onSelectNearest} />);
+    fireEvent.pointerDown(screen.getByTestId("timeline-rail"), { clientX: 100, pointerId: 1 });
+    expect(onSelectNearest).not.toHaveBeenCalled();
+  });
+
+  it("pointer down on marker button does not trigger rail drag", () => {
+    const onMarkerClick = vi.fn();
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("m", 40)]}
+        onMarkerClick={onMarkerClick}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+    // pointerdown on the marker — stopPropagation prevents rail handler
+    fireEvent.pointerDown(screen.getByTestId("timeline-marker"), { pointerId: 1 });
+    fireEvent.click(screen.getByTestId("timeline-marker"));
+    expect(onMarkerClick).toHaveBeenCalledWith("m");
+    expect(onSelectNearest).not.toHaveBeenCalled();
+  });
 });

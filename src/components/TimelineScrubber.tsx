@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useRef } from "react";
 import type { TimelineMarker } from "../lib/timeline";
 import { nearestMarkerForPosition } from "../lib/timeline";
 
@@ -24,12 +25,50 @@ export function TimelineScrubber({
   onMarkerClick,
   onSelectNearest,
 }: TimelineScrubberProps) {
+  const isDragging = useRef(false);
+  // Tracks the last emitted marker id during a drag to suppress duplicate calls.
+  const lastEmittedId = useRef<string | null>(null);
+
+  function selectNearestAtClientX(el: Element, clientX: number) {
+    if (markers.length === 0 || !onSelectNearest) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const pct = ((clientX - rect.left) / rect.width) * 100;
+    const nearest = nearestMarkerForPosition(markers, pct);
+    if (!nearest || nearest.id === lastEmittedId.current) return;
+    lastEmittedId.current = nearest.id;
+    onSelectNearest(nearest.id);
+  }
+
+  function stopDragging() {
+    isDragging.current = false;
+    lastEmittedId.current = null;
+  }
+
+  function handleRailPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (markers.length === 0 || !onSelectNearest) return;
+    isDragging.current = true;
+    lastEmittedId.current = null; // reset so the first pointerdown always fires
+    selectNearestAtClientX(e.currentTarget, e.clientX);
+  }
+
+  function handleRailPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isDragging.current) return;
+    // If no button is pressed (pointer released outside rail), clean up drag state.
+    if (e.buttons === 0) {
+      stopDragging();
+      return;
+    }
+    selectNearestAtClientX(e.currentTarget, e.clientX);
+  }
+
+  // Keep onClick as an accessibility/keyboard fallback (deduped by React state in parent).
   function handleRailClick(e: React.MouseEvent<HTMLDivElement>) {
     if (markers.length === 0 || !onSelectNearest) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.width === 0) return;
-    const clickPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const nearest = nearestMarkerForPosition(markers, clickPct);
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    const nearest = nearestMarkerForPosition(markers, pct);
     if (nearest) onSelectNearest(nearest.id);
   }
 
@@ -40,6 +79,10 @@ export function TimelineScrubber({
         className="relative flex-1 h-8"
         data-testid="timeline-rail"
         onClick={handleRailClick}
+        onPointerCancel={stopDragging}
+        onPointerDown={handleRailPointerDown}
+        onPointerMove={handleRailPointerMove}
+        onPointerUp={stopDragging}
         style={{ cursor: markers.length > 0 && onSelectNearest ? "pointer" : "default" }}
       >
         {/* Amber rail */}
@@ -79,6 +122,7 @@ export function TimelineScrubber({
               initial={{ opacity: 0 }}
               key={marker.id}
               onClick={(e) => { e.stopPropagation(); onMarkerClick?.(marker.id); }}
+              onPointerDown={(e) => e.stopPropagation()}
               style={{ left: `${marker.position}%` }}
               title={label}
               transition={{ duration: 0.2 }}

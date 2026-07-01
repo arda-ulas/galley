@@ -366,6 +366,79 @@ test("timeline: clicking rail enters past preview for nearest snapshot", async (
     .toContain(tokenB);
 });
 
+// ─── Step 18: drag scrub ─────────────────────────────────────────────────────
+
+test("timeline: drag across two snapshots selects via pointermove", async ({
+  page,
+}) => {
+  await page.goto("/r/demo");
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Snapshot 1: seed + tokenA  (taken after tokenA typed, before tokenB)
+  const tokenA = `drag_a_${Date.now()}`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(tokenA);
+  await expect(page.getByTestId("timeline-marker").first()).toBeVisible({
+    timeout: 5000,
+  });
+
+  // Snapshot 2: seed + tokenA + tokenB  (taken after tokenB typed)
+  const tokenB = `drag_b_${Date.now()}`;
+  await page.keyboard.type(tokenB);
+  await expect(page.getByTestId("timeline-marker")).toHaveCount(2, {
+    timeout: 5000,
+  });
+
+  // tokenC is live-only — not captured in either snapshot
+  const tokenC = `drag_c_${Date.now()}`;
+  await page.keyboard.type(tokenC);
+
+  // Rail layout with two snapshots: marker 1 ≈ 5%, marker 2 ≈ 88%.
+  // Strategy: press down near marker 2 (right) → pointermove to marker 1 (left).
+  //
+  // pointerdown at right  → selects snapshot 2 (tokenA + tokenB, no tokenC)
+  // pointermove to left   → should update selection to snapshot 1 (tokenA only)
+  //
+  // We assert BEFORE mouse.up() to eliminate the trailing-click fallback:
+  // after mouse.up() Chromium fires a click at endX which would select snapshot 1
+  // via the onClick rail handler — masking a broken pointermove.
+  // Asserting mid-drag (button still held) catches that hole.
+  const rail = page.getByTestId("timeline-rail");
+  const railBox = await rail.boundingBox();
+  expect(railBox).not.toBeNull();
+
+  const startX = railBox!.x + railBox!.width * 0.85; // near marker 2
+  const endX   = railBox!.x + railBox!.width * 0.08; // near marker 1
+  const midY   = railBox!.y + railBox!.height / 2;
+
+  await page.mouse.move(startX, midY);
+  await page.mouse.down();                      // pointerdown → snapshot 2 selected
+  await page.mouse.move(startX - 20, midY);    // nudge to start drag
+  await page.mouse.move(endX, midY);           // sweep to marker 1 via pointermove
+
+  // Assert mid-drag (before mouse.up) — proves pointermove changed selection.
+  // If pointermove is a no-op, snapshot 2 remains selected and tokenB is present.
+  try {
+    await expect(page.getByText("Viewing the past")).toBeVisible({
+      timeout: 1000,
+    });
+    const midDragText = await getEditorText(page);
+    expect(midDragText).toContain(tokenA);
+    expect(midDragText).not.toContain(tokenB);  // snapshot 2 has tokenB; snapshot 1 does not
+    expect(midDragText).not.toContain(tokenC);  // neither snapshot has tokenC
+  } finally {
+    await page.mouse.up();
+  }
+
+  // Past pill remains after release; Return to now restores the live doc
+  await expect(page.getByText("Viewing the past")).toBeVisible();
+  await page.getByTestId("return-to-now").click();
+  await expect(page.getByText("Viewing the past")).not.toBeVisible();
+  await expect
+    .poll(() => getEditorText(page), { timeout: 3000 })
+    .toContain(tokenC);
+});
+
 // ─── Step 15: past preview mode ──────────────────────────────────────────────
 
 test("past mode: click marker enters read-only past preview", async ({
