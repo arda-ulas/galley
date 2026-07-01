@@ -8,12 +8,6 @@ export type Snapshot = {
 
 export const SNAPSHOT_IDLE_MS = 1500;
 
-/**
- * Attaches a debounced Y.Text observer that captures snapshots into ySnapshots.
- * After `idleMs` ms of inactivity, the current text is pushed as a Snapshot.
- * Guards: skips empty/whitespace-only text and text identical to the last snapshot.
- * Returns a cleanup function that unobserves and cancels any pending timer.
- */
 export function createSnapshotRecorder(
   ytext: Y.Text,
   ySnapshots: Y.Array<Snapshot>,

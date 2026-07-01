@@ -30,9 +30,7 @@ export function CollaborativeEditor({
 }: CollaborativeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Re-create the CodeMirror view whenever the viewed snapshot changes.
-  // Using the id (or null) as the dep signal means we rebuild exactly once
-  // per mode switch, not on every RoomPage re-render.
+  // primitive dep — rebuilds exactly once per snapshot switch, not on every render
   const snapshotId = pastSnapshot?.id ?? null;
 
   useEffect(() => {
@@ -78,15 +76,11 @@ export function CollaborativeEditor({
 
     return () => {
       view.destroy();
-      // Clear only the cursor field so other tabs stop rendering this tab's
-      // stale cursor while it views the past. The `user` field (presence
-      // identity) is left intact and continues broadcasting.
+      // entering past mode: null out cursor so other tabs don't show a stale widget
       if (!pastSnapshot) {
         provider.awareness.setLocalStateField("cursor", null);
       }
     };
-    // pastSnapshot object is stable in state between re-renders; snapshotId
-    // is the primitive dep that captures enter/exit/switch events.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshotId]);
 

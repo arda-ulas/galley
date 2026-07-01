@@ -74,7 +74,6 @@ export function TimelineScrubber({
 
   return (
     <div className="relative h-full flex items-center px-4 gap-4 bg-[var(--timeline-bg)]">
-      {/* Rail + ticks + markers */}
       <div
         className="relative flex-1 h-8"
         data-testid="timeline-rail"
@@ -85,14 +84,12 @@ export function TimelineScrubber({
         onPointerUp={stopDragging}
         style={{ cursor: markers.length > 0 && onSelectNearest ? "pointer" : "default" }}
       >
-        {/* Amber rail */}
         <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--border)]" />
         <div
           className="absolute left-0 top-1/2 h-px -translate-y-1/2 bg-[var(--accent)]"
           style={{ width: "84%", opacity: 0.3 }}
         />
 
-        {/* Decorative ticks */}
         {Array.from({ length: TICK_COUNT }).map((_, i) => (
           <div
             className="absolute top-1/2 w-px -translate-y-1/2 bg-[var(--border)]"
@@ -105,7 +102,6 @@ export function TimelineScrubber({
           />
         ))}
 
-        {/* Snapshot markers — rendered as buttons for full keyboard/a11y support */}
         {markers.map((marker, i) => {
           const isSelected = marker.id === selectedMarkerId;
           const color =
@@ -147,7 +143,6 @@ export function TimelineScrubber({
         })}
       </div>
 
-      {/* Now indicator */}
       <div className="flex shrink-0 flex-col items-center gap-1">
         <div className="size-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
         <span className="font-mono text-[10px] leading-none text-[var(--muted)]">
