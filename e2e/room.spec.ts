@@ -297,3 +297,22 @@ test("does not render stale placeholder copy", async ({ page }) => {
   await expect(page.getByText("Session timeline")).not.toBeAttached();
   await expect(page.getByText("Echo/Rewind")).not.toBeAttached();
 });
+
+// ─── Step 14: real timeline markers ──────────────────────────────────────────
+
+test("timeline: snapshot marker appears after typing pause", async ({
+  page,
+}) => {
+  await page.goto("/r/demo");
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Type something unique so the snapshot recorder has non-empty text to capture
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(`tl_${Date.now()}`);
+
+  // The recorder debounces at 1500 ms then Framer Motion animates the dot in
+  // (~200 ms). Poll up to 5 s — avoids a fixed sleep and handles CI variance.
+  await expect(page.getByTestId("timeline-marker").first()).toBeVisible({
+    timeout: 5000,
+  });
+});

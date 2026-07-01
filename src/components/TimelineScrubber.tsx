@@ -1,16 +1,18 @@
 import { motion } from "framer-motion";
-
-type TimelineMarker = {
-  id: string;
-  position: number;
-  color?: string;
-};
+import type { TimelineMarker } from "../lib/timeline";
 
 type TimelineScrubberProps = {
   markers: TimelineMarker[];
 };
 
 const TICK_COUNT = 9;
+
+function formatRelative(ms: number): string {
+  const delta = Date.now() - ms;
+  if (delta < 60_000) return "just now";
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
+  return `${Math.floor(delta / 3_600_000)}h ago`;
+}
 
 export function TimelineScrubber({ markers }: TimelineScrubberProps) {
   return (
@@ -38,27 +40,34 @@ export function TimelineScrubber({ markers }: TimelineScrubberProps) {
         ))}
 
         {/* Snapshot markers */}
-        {markers.map((marker, i) => (
-          <motion.div
-            animate={{ opacity: 1, scale: 1 }}
-            className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-            initial={{ opacity: 0, scale: 0.5 }}
-            key={marker.id}
-            style={{
-              left: `${marker.position}%`,
-              background: marker.color ?? (i % 2 === 0 ? "var(--accent)" : "var(--presence-teal)"),
-              boxShadow: `0 0 6px ${marker.color ?? (i % 2 === 0 ? "var(--accent)" : "var(--presence-teal)")}`,
-            }}
-            title={`Snapshot ${i + 1}`}
-            transition={{ duration: 0.2 }}
-          />
-        ))}
+        {markers.map((marker, i) => {
+          const color =
+            i % 2 === 0 ? "var(--accent)" : "var(--presence-teal)";
+          return (
+            <motion.div
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer"
+              data-testid="timeline-marker"
+              initial={{ opacity: 0, scale: 0.5 }}
+              key={marker.id}
+              style={{
+                left: `${marker.position}%`,
+                background: color,
+                boxShadow: `0 0 6px ${color}`,
+              }}
+              title={formatRelative(marker.createdAt)}
+              transition={{ duration: 0.2 }}
+            />
+          );
+        })}
       </div>
 
       {/* Now indicator */}
       <div className="flex shrink-0 flex-col items-center gap-1">
         <div className="size-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
-        <span className="font-mono text-[10px] leading-none text-[var(--muted)]">now</span>
+        <span className="font-mono text-[10px] leading-none text-[var(--muted)]">
+          now
+        </span>
       </div>
     </div>
   );
