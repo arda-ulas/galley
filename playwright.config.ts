@@ -15,8 +15,9 @@ export default defineConfig({
     {
       command: "npm run server",
       port: 1234,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 10_000,
+      env: { ECHO_REWIND_TEST: "1" },
     },
     {
       command: "npm run dev",

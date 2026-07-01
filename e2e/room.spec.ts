@@ -1,4 +1,102 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/**
+ * Read the CodeMirror editor's true text content, stripping remote cursor
+ * widgets (.cm-ySelectionCaret) before returning.
+ *
+ * Background: y-codemirror.next renders remote cursors as inline WidgetDecorations
+ * that inject DOM nodes (word-joiner characters + a name label) into .cm-content.
+ * Playwright's textContent() includes those text nodes, which can split the
+ * asserted strings and cause false-negative toContain failures. Removing the
+ * widget elements from a clone gives us the real document text.
+ */
+async function getEditorText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.querySelector(".cm-content");
+    if (!el) return "";
+    const clone = el.cloneNode(true) as Element;
+    clone.querySelectorAll(".cm-ySelectionCaret").forEach((w) => w.remove());
+    return clone.textContent ?? "";
+  });
+}
+
+// Reset the in-memory room state before every test so each test starts with a
+// fresh Y.Doc seeded by the server. Requires the server to be running with
+// ECHO_REWIND_TEST=1 (set via playwright.config.ts webServer env option).
+test.beforeEach(async ({ request }) => {
+  const res = await request.post("http://127.0.0.1:1234/__test/reset");
+  if (!res.ok()) {
+    throw new Error(
+      `/__test/reset returned ${res.status()} — is the server running with ECHO_REWIND_TEST=1?`,
+    );
+  }
+});
+
+// ─── Step 12: starter code seeding ───────────────────────────────────────────
+
+test("starter code: seeds automatically on first load", async ({ page }) => {
+  await page.goto("/r/demo");
+
+  // Seed is inserted server-side at room creation time and flows to the client
+  // during the initial Yjs sync step. Wait for Live as proxy for sync completion.
+  await expect(page.getByText("Live")).toBeVisible();
+  await expect(page.locator(".cm-content")).toContainText("captureSnapshot", {
+    timeout: 3000,
+  });
+});
+
+test("starter code: appears exactly once with two tabs opened concurrently", async ({
+  browser,
+}) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+
+  try {
+    const pageA = await ctxA.newPage();
+    const pageB = await ctxB.newPage();
+
+    // Navigate both tabs simultaneously. With client-side seeding this was a
+    // race: both tabs could see an empty Y.Text and both insert the seed.
+    // Server-side seeding eliminates the race — the room is created (and seeded)
+    // exactly once before any WS client connects, regardless of concurrency.
+    await Promise.all([pageA.goto("/r/demo"), pageB.goto("/r/demo")]);
+
+    // Both tabs must sync before we check content
+    await expect(pageA.getByText("Live")).toBeVisible();
+    await expect(pageB.getByText("Live")).toBeVisible();
+
+    // Both tabs must display the seed content (strip cursor widgets before matching)
+    await expect
+      .poll(() => getEditorText(pageA), { timeout: 3000 })
+      .toContain("captureSnapshot");
+    await expect
+      .poll(() => getEditorText(pageB), { timeout: 3000 })
+      .toContain("captureSnapshot");
+
+    // Exactly 1 occurrence of the seed marker — two concurrent inserts would
+    // produce 2. Strip cursor widgets so the caret DOM cannot split the word.
+    const textA = await getEditorText(pageA);
+    const occurrences = (textA.match(/captureSnapshot/g) ?? []).length;
+    expect(occurrences).toBe(1);
+
+    // User edits must flow A → B without overwriting the seed
+    const joinToken = `join_safe_${Date.now()}`;
+    await pageA.locator(".cm-content").click();
+    await pageA.keyboard.type(joinToken);
+    await expect
+      .poll(() => getEditorText(pageB), { timeout: 3000 })
+      .toContain(joinToken);
+
+    // Seed intact on both sides after the user edit
+    expect(await getEditorText(pageA)).toContain("captureSnapshot");
+    expect(await getEditorText(pageB)).toContain("captureSnapshot");
+  } finally {
+    await ctxA.close();
+    await ctxB.close();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 test("renders the amber room shell", async ({ page }) => {
   await page.goto("/r/demo");
@@ -15,8 +113,13 @@ test("renders the amber room shell", async ({ page }) => {
   // Local user avatar is visible
   await expect(page.getByTitle(/· You/)).toBeVisible();
 
+  // Seed content is visible (seeded server-side on room creation)
+  await expect(page.locator(".cm-content")).toContainText("captureSnapshot");
+
   // Timeline "now" indicator — scoped to footer to avoid collision with Date.now() tokens in editor
-  await expect(page.locator("footer").getByText("now", { exact: true })).toBeVisible();
+  await expect(
+    page.locator("footer").getByText("now", { exact: true }),
+  ).toBeVisible();
 });
 
 test("CodeMirror editor mounts and accepts input", async ({ page }) => {
@@ -54,17 +157,20 @@ test("realtime sync between two tabs", async ({ browser }) => {
     await pageA.locator(".cm-content").click();
     await pageA.keyboard.type(syncToken);
 
-    // Tab B must receive the content within 3 seconds via Yjs WebSocket sync
-    await expect(pageB.locator(".cm-content")).toContainText(syncToken, {
-      timeout: 3000,
-    });
+    // Tab B must receive the content within 3 seconds via Yjs WebSocket sync.
+    // Use getEditorText to strip remote cursor widgets before matching —
+    // y-codemirror.next injects cursor DOM (word-joiners + label) into .cm-content
+    // which can split the asserted token in Playwright's textContent() view.
+    await expect
+      .poll(() => getEditorText(pageB), { timeout: 3000 })
+      .toContain(syncToken);
 
     // Pressing undo in Tab B must not delete Tab A's remote content.
     // (Native CM history is disabled; yCollab undoManager is false for now.)
     await pageB.locator(".cm-content").click();
     await pageB.keyboard.press("ControlOrMeta+z");
-    await expect(pageB.locator(".cm-content")).toContainText(syncToken);
-    await expect(pageA.locator(".cm-content")).toContainText(syncToken);
+    expect(await getEditorText(pageB)).toContain(syncToken);
+    expect(await getEditorText(pageA)).toContain(syncToken);
   } finally {
     await ctxA.close();
     await ctxB.close();
@@ -155,10 +261,11 @@ test("remote cursor: Page A renders Page B's cursor widget", async ({ browser })
     await pageA.locator(".cm-content").click();
     await pageA.keyboard.type(cursorToken);
 
-    // Wait for Page B to receive the content (confirms Y.Text is populated on both sides)
-    await expect(pageB.locator(".cm-content")).toContainText(cursorToken, {
-      timeout: 3000,
-    });
+    // Wait for Page B to receive the content (confirms Y.Text is populated on both sides).
+    // Page A's cursor widget lives inside Page B's .cm-content, so strip it before matching.
+    await expect
+      .poll(() => getEditorText(pageB), { timeout: 3000 })
+      .toContain(cursorToken);
 
     // Focus Page B's editor and move the cursor — this triggers the awareness cursor update.
     // yRemoteSelections calls awareness.setLocalStateField('cursor', {anchor, head}) on every
@@ -168,7 +275,9 @@ test("remote cursor: Page A renders Page B's cursor widget", async ({ browser })
 
     // Page A must render Page B's remote cursor widget (.cm-ySelectionCaret is the span
     // y-codemirror.next injects at the remote cursor position).
-    await expect(pageA.locator(".cm-ySelectionCaret")).toBeVisible({ timeout: 5000 });
+    await expect(pageA.locator(".cm-ySelectionCaret")).toBeVisible({
+      timeout: 5000,
+    });
 
     // Presence bar must be unaffected: still 2 avatars, exactly 1 "You"
     await expect(pageA.getByTitle(/·/)).toHaveCount(2);
