@@ -20,15 +20,56 @@ test("renders the amber room shell", async ({ page }) => {
   await expect(page.locator("footer").getByText("now", { exact: true })).toBeVisible();
 });
 
-test("CodeMirror editor mounts and renders seed code", async ({ page }) => {
+test("CodeMirror editor mounts and accepts input", async ({ page }) => {
   await page.goto("/r/demo");
 
   // CodeMirror root and content layer must be visible
   await expect(page.locator(".cm-editor")).toBeVisible();
   await expect(page.locator(".cm-content")).toBeVisible();
 
-  // Seed text must be rendered — captureSnapshot is a unique function name in editorSeed
-  await expect(page.locator(".cm-content").getByText("captureSnapshot", { exact: false })).toBeVisible();
+  // Editor must accept keyboard input
+  await page.locator(".cm-content").click();
+  await page.keyboard.type("hello_editor");
+  await expect(page.locator(".cm-content")).toContainText("hello_editor");
+});
+
+test("realtime sync between two tabs", async ({ browser }) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+
+  try {
+    const pageA = await ctxA.newPage();
+    const pageB = await ctxB.newPage();
+
+    await pageA.goto("/r/demo");
+    await pageB.goto("/r/demo");
+
+    // Both tabs must reach Live before testing sync
+    await expect(pageA.getByText("Live")).toBeVisible();
+    await expect(pageB.getByText("Live")).toBeVisible();
+
+    // Unique token per run — avoids false positives from a reused server with old content
+    const syncToken = `sync_check_${Date.now()}`;
+
+    // Type the token in Tab A
+    await pageA.locator(".cm-content").click();
+    await pageA.keyboard.type(syncToken);
+
+    // Tab B must receive the content within 3 seconds via Yjs WebSocket sync
+    await expect(pageB.locator(".cm-content")).toContainText(syncToken, {
+      timeout: 3000,
+    });
+
+    // Pressing undo in Tab B must not delete Tab A's remote content.
+    // (Native CM history is disabled; yCollab undoManager is false for now.)
+    await pageB.locator(".cm-content").click();
+    await pageB.keyboard.press("ControlOrMeta+z");
+    await expect(pageB.locator(".cm-content")).toContainText(syncToken);
+    await expect(pageA.locator(".cm-content")).toContainText(syncToken);
+  } finally {
+    await ctxA.close();
+    await ctxB.close();
+  }
 });
 
 test("does not render stale placeholder copy", async ({ page }) => {
