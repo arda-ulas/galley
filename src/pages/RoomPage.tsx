@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import { CollaborativeEditor } from "../components/CollaborativeEditor";
@@ -69,24 +70,34 @@ export function RoomPage({ roomId }: RoomPageProps) {
       <div className="relative h-full">
         <CollaborativeEditor pastSnapshot={selectedSnapshot} />
 
-        {selectedSnapshot && (
-          <div className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-1.5 font-mono text-[11px] shadow-md">
-            <span className="text-[var(--past)]">Viewing the past</span>
-            <span className="text-[var(--muted)]">·</span>
-            <span className="text-[var(--muted)]">
-              {formatRelative(selectedSnapshot.createdAt)}
-            </span>
-            <span className="text-[var(--muted)]">·</span>
-            <button
-              className="text-[var(--text)] transition-colors hover:text-[var(--accent)]"
-              data-testid="return-to-now"
-              onClick={handleReturnToNow}
-              type="button"
+        <AnimatePresence>
+          {selectedSnapshot && (
+            <motion.div
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-1.5 font-mono text-[11px] shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
+              exit={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, y: -4 }}
+              key="past-pill"
+              style={{ borderColor: "rgba(90,143,181,0.35)" }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
             >
-              Return to now
-            </button>
-          </div>
-        )}
+              <span className="text-[var(--past)]">Viewing the past</span>
+              <span className="text-[var(--border)]" aria-hidden>·</span>
+              <span className="text-[var(--muted)]">
+                {formatRelative(selectedSnapshot.createdAt)}
+              </span>
+              <span className="text-[var(--border)]" aria-hidden>·</span>
+              <button
+                className="text-[var(--text)] underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--panel)]"
+                data-testid="return-to-now"
+                onClick={handleReturnToNow}
+                type="button"
+              >
+                Return to now
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </AppShell>
   );

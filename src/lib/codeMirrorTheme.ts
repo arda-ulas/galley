@@ -110,7 +110,9 @@ export const amberPastTheme = EditorView.theme(
       fontSize: "13px",
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
       backgroundColor: "#08090F",
-      color: "#D4C9B4",
+      // Slightly cooler/dimmer text reinforces the "historical" feel without
+      // sacrificing readability.
+      color: "#B8B0A0",
     },
     ".cm-scroller": {
       overflow: "auto",
@@ -119,6 +121,9 @@ export const amberPastTheme = EditorView.theme(
     ".cm-content": {
       caretColor: "transparent",
       padding: "16px 0",
+    },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+      backgroundColor: "rgba(90, 143, 181, 0.28)",
     },
     ".cm-gutters": {
       backgroundColor: "#08090F",
