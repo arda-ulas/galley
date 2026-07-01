@@ -9,33 +9,24 @@ type RoomPageProps = {
 };
 
 const demoUsers = [
-  {
-    id: "user-ada",
-    name: "Ada",
-    color: "var(--presence-blue)",
-    status: "editing",
-  },
-  {
-    id: "user-linus",
-    name: "Linus",
-    color: "var(--presence-gold)",
-    status: "viewing",
-  },
+  { id: "user-a", name: "Ada", color: "#F5A623", status: "editing" },
+  { id: "user-b", name: "Lin", color: "#5BB8A0", status: "viewing" },
 ];
 
 const demoMarkers = [
-  { id: "snapshot-1", position: 9, label: "Seed" },
-  { id: "snapshot-2", position: 31, label: "+ parser" },
-  { id: "snapshot-3", position: 58, label: "+ diff" },
-  { id: "snapshot-4", position: 83, label: "latest" },
+  { id: "s1", position: 11, color: "#F5A623" },
+  { id: "s2", position: 29, color: "#5BB8A0" },
+  { id: "s3", position: 47, color: "#F5A623" },
+  { id: "s4", position: 63, color: "#5BB8A0" },
+  { id: "s5", position: 79, color: "#F5A623" },
 ];
 
 export function RoomPage({ roomId }: RoomPageProps) {
   return (
     <AppShell
-      roomId={roomId}
       connection={<ConnectionStatus status="synced" />}
       presence={<PresenceBar users={demoUsers} />}
+      roomId={roomId}
       timeline={<TimelineScrubber markers={demoMarkers} />}
     >
       <EditorPlaceholder />

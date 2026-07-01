@@ -11,23 +11,18 @@ type PresenceBarProps = {
 
 export function PresenceBar({ users }: PresenceBarProps) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex -space-x-2">
-        {users.map((user) => (
-          <div
-            aria-label={`${user.name} ${user.status}`}
-            className="flex size-8 items-center justify-center rounded-full border-2 border-[var(--bg)] text-xs font-semibold text-[var(--bg)]"
-            key={user.id}
-            style={{ background: user.color }}
-            title={`${user.name} · ${user.status}`}
-          >
-            {user.name.slice(0, 1)}
-          </div>
-        ))}
-      </div>
-      <div className="hidden text-xs text-[var(--muted)] sm:block">
-        {users.length} present
-      </div>
+    <div className="flex -space-x-2">
+      {users.map((user) => (
+        <div
+          aria-label={`${user.name} · ${user.status}`}
+          className="flex size-7 items-center justify-center rounded-full border-2 border-[var(--panel)] text-[10px] font-semibold text-[var(--bg)]"
+          key={user.id}
+          style={{ background: user.color }}
+          title={`${user.name} · ${user.status}`}
+        >
+          {user.name.slice(0, 1)}
+        </div>
+      ))}
     </div>
   );
 }
