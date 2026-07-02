@@ -1,4 +1,23 @@
-import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { expect, test as base, type Page } from "@playwright/test";
+
+type EchoFixtures = {
+  roomPath: string;
+};
+
+const test = base.extend<EchoFixtures>({
+  roomPath: async ({}, use, testInfo) => {
+    const safeTitle = testInfo.title
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase()
+      .slice(0, 60);
+
+    await use(
+      `/r/demo?__e2eRoom=e2e-${testInfo.workerIndex}-${safeTitle}-${randomUUID().slice(0, 8)}`,
+    );
+  },
+});
 
 /**
  * Read the CodeMirror editor's true text content, stripping remote cursor
@@ -40,8 +59,8 @@ test.afterEach(async ({ page }) => {
 
 // ─── Step 12: starter code seeding ───────────────────────────────────────────
 
-test("starter code: seeds automatically on first load", async ({ page }) => {
-  await page.goto("/r/demo");
+test("starter code: seeds automatically on first load", async ({ page, roomPath }) => {
+  await page.goto(roomPath);
 
   // Seed is inserted server-side at room creation time and flows to the client
   // during the initial Yjs sync step. Wait for Live as proxy for sync completion.
@@ -53,6 +72,7 @@ test("starter code: seeds automatically on first load", async ({ page }) => {
 
 test("starter code: appears exactly once with two tabs opened concurrently", async ({
   browser,
+  roomPath,
 }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
@@ -65,7 +85,7 @@ test("starter code: appears exactly once with two tabs opened concurrently", asy
     // race: both tabs could see an empty Y.Text and both insert the seed.
     // Server-side seeding eliminates the race — the room is created (and seeded)
     // exactly once before any WS client connects, regardless of concurrency.
-    await Promise.all([pageA.goto("/r/demo"), pageB.goto("/r/demo")]);
+    await Promise.all([pageA.goto(roomPath), pageB.goto(roomPath)]);
 
     // Both tabs must sync before we check content
     await expect(pageA.getByText("Live")).toBeVisible();
@@ -104,8 +124,8 @@ test("starter code: appears exactly once with two tabs opened concurrently", asy
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-test("renders the amber room shell", async ({ page }) => {
-  await page.goto("/r/demo");
+test("renders the amber room shell", async ({ page, roomPath }) => {
+  await page.goto(roomPath);
 
   // Top-bar room label
   await expect(page.getByText(/echo \/ demo/)).toBeVisible();
@@ -128,8 +148,8 @@ test("renders the amber room shell", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("CodeMirror editor mounts and accepts input", async ({ page }) => {
-  await page.goto("/r/demo");
+test("CodeMirror editor mounts and accepts input", async ({ page, roomPath }) => {
+  await page.goto(roomPath);
 
   // CodeMirror root and content layer must be visible
   await expect(page.locator(".cm-editor")).toBeVisible();
@@ -141,7 +161,7 @@ test("CodeMirror editor mounts and accepts input", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText("hello_editor");
 });
 
-test("realtime sync between two tabs", async ({ browser }) => {
+test("realtime sync between two tabs", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
 
@@ -149,8 +169,8 @@ test("realtime sync between two tabs", async ({ browser }) => {
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
-    await pageA.goto("/r/demo");
-    await pageB.goto("/r/demo");
+    await pageA.goto(roomPath);
+    await pageB.goto(roomPath);
 
     // Both tabs must reach Live before testing sync
     await expect(pageA.getByText("Live")).toBeVisible();
@@ -183,7 +203,7 @@ test("realtime sync between two tabs", async ({ browser }) => {
   }
 });
 
-test("awareness presence: two tabs see each other's avatar", async ({ browser }) => {
+test("awareness presence: two tabs see each other's avatar", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
 
@@ -191,8 +211,8 @@ test("awareness presence: two tabs see each other's avatar", async ({ browser })
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
-    await pageA.goto("/r/demo");
-    await pageB.goto("/r/demo");
+    await pageA.goto(roomPath);
+    await pageB.goto(roomPath);
 
     // Both tabs must be live (WebSocket connected and Yjs synced)
     await expect(pageA.getByText("Live")).toBeVisible();
@@ -211,7 +231,7 @@ test("awareness presence: two tabs see each other's avatar", async ({ browser })
   }
 });
 
-test("awareness cleanup: Page A drops to 1 avatar when Page B closes", async ({ browser }) => {
+test("awareness cleanup: Page A drops to 1 avatar when Page B closes", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
 
@@ -219,8 +239,8 @@ test("awareness cleanup: Page A drops to 1 avatar when Page B closes", async ({ 
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
-    await pageA.goto("/r/demo");
-    await pageB.goto("/r/demo");
+    await pageA.goto(roomPath);
+    await pageB.goto(roomPath);
 
     // Both tabs must be live before we rely on awareness state
     await expect(pageA.getByText("Live")).toBeVisible();
@@ -245,7 +265,7 @@ test("awareness cleanup: Page A drops to 1 avatar when Page B closes", async ({ 
   }
 });
 
-test("remote cursor: Page A renders Page B's cursor widget", async ({ browser }) => {
+test("remote cursor: Page A renders Page B's cursor widget", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
 
@@ -253,8 +273,8 @@ test("remote cursor: Page A renders Page B's cursor widget", async ({ browser })
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
-    await pageA.goto("/r/demo");
-    await pageB.goto("/r/demo");
+    await pageA.goto(roomPath);
+    await pageB.goto(roomPath);
 
     // Both tabs must be live and synced before exercising cursors
     await expect(pageA.getByText("Live")).toBeVisible();
@@ -294,8 +314,8 @@ test("remote cursor: Page A renders Page B's cursor widget", async ({ browser })
   }
 });
 
-test("does not render stale placeholder copy", async ({ page }) => {
-  await page.goto("/r/demo");
+test("does not render stale placeholder copy", async ({ page, roomPath }) => {
+  await page.goto(roomPath);
 
   await expect(page.getByText("CodeMirror placeholder")).not.toBeAttached();
   await expect(page.getByText("static scaffold")).not.toBeAttached();
@@ -308,8 +328,9 @@ test("does not render stale placeholder copy", async ({ page }) => {
 
 test("timeline: snapshot marker appears after typing pause", async ({
   page,
+  roomPath,
 }) => {
-  await page.goto("/r/demo");
+  await page.goto(roomPath);
   await expect(page.getByText("Live")).toBeVisible();
 
   // Confirm no marker exists before typing — proves the marker is created by
@@ -331,8 +352,9 @@ test("timeline: snapshot marker appears after typing pause", async ({
 
 test("timeline: clicking rail enters past preview for nearest snapshot", async ({
   page,
+  roomPath,
 }) => {
-  await page.goto("/r/demo");
+  await page.goto(roomPath);
   await expect(page.getByText("Live")).toBeVisible();
 
   // Type tokenA and wait for the snapshot marker to commit
@@ -376,8 +398,9 @@ test("timeline: clicking rail enters past preview for nearest snapshot", async (
 
 test("timeline: drag across two snapshots selects via pointermove", async ({
   page,
+  roomPath,
 }) => {
-  await page.goto("/r/demo");
+  await page.goto(roomPath);
   await expect(page.getByText("Live")).toBeVisible();
 
   // Snapshot 1: seed + tokenA  (taken after tokenA typed, before tokenB)
@@ -449,8 +472,9 @@ test("timeline: drag across two snapshots selects via pointermove", async ({
 
 test("past mode: click marker enters read-only past preview", async ({
   page,
+  roomPath,
 }) => {
-  await page.goto("/r/demo");
+  await page.goto(roomPath);
   await expect(page.getByText("Live")).toBeVisible();
 
   // Phase 1: type tokenA and wait for its snapshot marker to appear.
@@ -501,7 +525,7 @@ test("past mode: click marker enters read-only past preview", async ({
   expect(await getEditorText(page)).not.toContain("should_not_appear");
 });
 
-test("past mode: Tab A views past locally while Tab B edits live; Return to now picks up Tab B edits", async ({ browser }) => {
+test("past mode: Tab A views past locally while Tab B edits live; Return to now picks up Tab B edits", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
 
@@ -509,8 +533,8 @@ test("past mode: Tab A views past locally while Tab B edits live; Return to now 
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
-    await pageA.goto("/r/demo");
-    await pageB.goto("/r/demo");
+    await pageA.goto(roomPath);
+    await pageB.goto(roomPath);
 
     // Both tabs must reach Live status before testing
     await expect(pageA.getByText("Live")).toBeVisible();
