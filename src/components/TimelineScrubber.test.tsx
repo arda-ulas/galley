@@ -425,6 +425,34 @@ describe("TimelineScrubber", () => {
     expect(onReturnToNow).not.toHaveBeenCalled();
   });
 
+  // ── NOW terminus threshold (>=98%) ───────────────────────────────────────
+  // Pointer-down/move threshold is covered by the e2e drag-to-NOW test.
+  // jsdom's PointerEvent does not propagate getBoundingClientRect spies the same
+  // way as MouseEvent, so only the click path is unit-tested here.
+
+  it("rail click at >=98% calls onReturnToNow not onSelectNearest", () => {
+    const onReturnToNow = vi.fn();
+    const onSelectNearest = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("a", 20), marker("b", 70)]}
+        onReturnToNow={onReturnToNow}
+        onSelectNearest={onSelectNearest}
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    vi.spyOn(rail, "getBoundingClientRect").mockReturnValue({
+      left: 0, right: 400, width: 400,
+      top: 0, bottom: 32, height: 32,
+      x: 0, y: 0, toJSON: () => ({}),
+    });
+
+    // clientX=395 → 98.75% → past NOW_THRESHOLD
+    fireEvent.click(rail, { clientX: 395 });
+    expect(onReturnToNow).toHaveBeenCalledOnce();
+    expect(onSelectNearest).not.toHaveBeenCalled();
+  });
+
   it("pointer down on marker button does not trigger rail drag", () => {
     const onMarkerClick = vi.fn();
     const onSelectNearest = vi.fn();

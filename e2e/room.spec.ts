@@ -560,6 +560,56 @@ test("past mode: click marker enters read-only past preview", async ({
   expect(await getEditorText(page)).not.toContain("should_not_appear");
 });
 
+// ─── NOW terminus: drag/click far-right returns to live ──────────────────────
+
+test("timeline: clicking far-right rail edge from past mode returns to live", async ({
+  page,
+  roomPath,
+}) => {
+  await page.goto(roomPath);
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Snapshot 1: tokenA
+  const tokenA = `now_edge_a_${Date.now()}`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(tokenA);
+  await expect(page.getByTestId("timeline-marker").first()).toBeVisible({
+    timeout: 5000,
+  });
+
+  // Snapshot 2: tokenA + tokenB (live-only tokenC added after)
+  const tokenB = `now_edge_b_${Date.now()}`;
+  await page.keyboard.type(tokenB);
+  await expect(page.getByTestId("timeline-marker")).toHaveCount(2, {
+    timeout: 5000,
+  });
+  const tokenC = `now_edge_live_${Date.now()}`;
+  await page.keyboard.type(tokenC);
+
+  // Enter past mode by clicking the first (oldest) marker
+  await page.getByTestId("timeline-marker").first().click();
+  await expect(page.getByText("Viewing the past")).toBeVisible();
+
+  // Click the far-right edge of the rail (>=98% of width) to trigger NOW threshold
+  const rail = page.getByTestId("timeline-rail");
+  const railBox = await rail.boundingBox();
+  expect(railBox).not.toBeNull();
+  await rail.click({
+    position: {
+      x: Math.floor(railBox!.width * 0.99),
+      y: railBox!.height / 2,
+    },
+  });
+
+  // Past pill must disappear
+  await expect(page.getByText("Viewing the past")).not.toBeVisible();
+
+  // Live editor is restored and contains the latest content
+  await expect
+    .poll(() => getEditorText(page), { timeout: 3000 })
+    .toContain(tokenC);
+});
+
 test("past mode: Tab A views past locally while Tab B edits live; Return to now picks up Tab B edits", async ({ browser, roomPath }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();

@@ -12,6 +12,8 @@ type TimelineScrubberProps = {
 };
 
 const TICK_COUNT = 9;
+// Drag position (%) at or beyond which we snap to NOW instead of a snapshot.
+const NOW_THRESHOLD = 98;
 
 function formatRelative(ms: number): string {
   const delta = Date.now() - ms;
@@ -31,6 +33,9 @@ export function TimelineScrubber({
   const isDraggingRef = useRef(false);
   // State for visual re-render on drag start/end (cursor, caret size).
   const [isDragging, setIsDragging] = useState(false);
+  // Raw pointer % during drag — drives smooth visual caret/fill tracking.
+  // null when not dragging; caret snaps back to selected marker on drag end.
+  const [dragPct, setDragPct] = useState<number | null>(null);
   const lastEmittedId = useRef<string | null>(null);
   // Tracks the captured pointer ID so we can release it precisely.
   const capturedPointerIdRef = useRef<number | null>(null);
@@ -45,8 +50,6 @@ export function TimelineScrubber({
     : -1; // -1 = live/now
 
   // Slider ARIA: snapshots map to 0..N-1; NOW = N.
-  // Keeping Now (N) strictly greater than the newest snapshot (N-1) makes every
-  // position on the range distinct — a requirement of the slider contract.
   const ariaValueNow =
     selectedSortedIndex === -1 ? markers.length : selectedSortedIndex;
   const ariaValueText =
@@ -54,21 +57,35 @@ export function TimelineScrubber({
       ? "Now"
       : `Snapshot ${selectedSortedIndex + 1} of ${markers.length}`;
 
-  // Caret sits at the selected snapshot position in past mode, or at the NOW
-  // terminus (100%) in live mode.
-  const caretPosition = selectedMarker ? selectedMarker.position : 100;
+  // Discrete position derived from parent state (selected snapshot or 100% for NOW).
+  const selectedPosition = selectedMarker ? selectedMarker.position : 100;
+  // Visual position: follows pointer continuously while dragging, snaps on drag end.
+  const visualPosition =
+    isDragging && dragPct !== null ? dragPct : selectedPosition;
 
   function selectNearestAtClientX(el: Element, clientX: number) {
     if (markers.length === 0 || !onSelectNearest) return;
     const rect = el.getBoundingClientRect();
     if (rect.width === 0) return;
-    // With pointer capture el is always the rail, so getBoundingClientRect is
-    // correct even when the pointer is outside the rail boundary.
     const pct = ((clientX - rect.left) / rect.width) * 100;
     const nearest = nearestMarkerForPosition(markers, pct);
     if (!nearest || nearest.id === lastEmittedId.current) return;
     lastEmittedId.current = nearest.id;
     onSelectNearest(nearest.id);
+  }
+
+  // Route drag position to either onReturnToNow (>=threshold) or nearest snapshot.
+  // Uses "now" sentinel in lastEmittedId so we only fire onReturnToNow once per
+  // crossing, matching the same dedup pattern used for snapshot selection.
+  function emitDragPosition(el: Element, clientX: number, pct: number) {
+    if (pct >= NOW_THRESHOLD) {
+      if (lastEmittedId.current !== "now") {
+        lastEmittedId.current = "now";
+        onReturnToNow?.();
+      }
+    } else {
+      selectNearestAtClientX(el, clientX);
+    }
   }
 
   function stopDragging(e?: React.PointerEvent<HTMLDivElement>) {
@@ -84,14 +101,12 @@ export function TimelineScrubber({
     capturedPointerIdRef.current = null;
     isDraggingRef.current = false;
     setIsDragging(false);
+    setDragPct(null);
     lastEmittedId.current = null;
   }
 
   function handleRailPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (markers.length === 0 || !onSelectNearest) return;
-    // Capture the pointer so drag continues even when the cursor leaves the rail.
-    // Guard: setPointerCapture is absent in jsdom; the drag still works, just
-    // without out-of-bounds tracking (covered by E2E in real Chromium).
+    if (markers.length === 0) return;
     if (typeof e.currentTarget.setPointerCapture === "function") {
       e.currentTarget.setPointerCapture(e.pointerId);
     }
@@ -99,17 +114,28 @@ export function TimelineScrubber({
     isDraggingRef.current = true;
     setIsDragging(true);
     lastEmittedId.current = null;
-    selectNearestAtClientX(e.currentTarget, e.clientX);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct =
+      rect.width === 0
+        ? 0
+        : Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    setDragPct(pct);
+    emitDragPosition(e.currentTarget, e.clientX, pct);
   }
 
   function handleRailPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!isDraggingRef.current) return;
-    // Guard against pointer-up that fires outside the element before capture.
     if (e.buttons === 0) {
       stopDragging(e);
       return;
     }
-    selectNearestAtClientX(e.currentTarget, e.clientX);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct =
+      rect.width === 0
+        ? 0
+        : Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    setDragPct(pct);
+    emitDragPosition(e.currentTarget, e.clientX, pct);
   }
 
   function handleRailPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -122,10 +148,15 @@ export function TimelineScrubber({
 
   // onClick kept as accessibility fallback; deduped by parent state comparison.
   function handleRailClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (markers.length === 0 || !onSelectNearest) return;
+    if (markers.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.width === 0) return;
     const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    if (pct >= NOW_THRESHOLD) {
+      onReturnToNow?.();
+      return;
+    }
+    if (!onSelectNearest) return;
     const nearest = nearestMarkerForPosition(markers, pct);
     if (nearest) onSelectNearest(nearest.id);
   }
@@ -148,7 +179,10 @@ export function TimelineScrubber({
       case "ArrowRight":
       case "ArrowUp": {
         e.preventDefault();
-        if (selectedSortedIndex !== -1 && selectedSortedIndex < sortedMarkers.length - 1) {
+        if (
+          selectedSortedIndex !== -1 &&
+          selectedSortedIndex < sortedMarkers.length - 1
+        ) {
           onMarkerClick?.(sortedMarkers[selectedSortedIndex + 1].id);
         } else if (selectedSortedIndex === sortedMarkers.length - 1) {
           // Most recent snapshot → return to live.
@@ -213,7 +247,7 @@ export function TimelineScrubber({
           className="absolute left-0 top-1/2 -translate-y-1/2"
           style={{
             height: "3px",
-            width: `${caretPosition}%`,
+            width: `${visualPosition}%`,
             background: isPast ? "var(--past)" : "var(--accent)",
             opacity: isPast ? 0.45 : 0.3,
             borderRadius: "1px 0 0 1px",
@@ -280,27 +314,26 @@ export function TimelineScrubber({
           );
         })}
 
-        {/* NOW terminus — on the rail at the right edge, not beside it */}
+        {/* NOW terminus — horizontal layout keeps label clear of the fader cap */}
         <div
-          className="absolute top-1/2 flex flex-col items-center pointer-events-none"
-          style={{ left: "100%", transform: "translate(-50%, -50%)" }}
+          className="absolute top-1/2 flex items-center gap-1 pointer-events-none"
+          style={{ left: "100%", transform: "translate(3px, -50%)" }}
         >
           <div
             className="size-2 rounded-full bg-[var(--accent)]"
-            style={{ boxShadow: "0 0 8px var(--accent)" }}
+            style={{ boxShadow: "0 0 6px var(--accent)" }}
           />
-          <span className="font-mono text-[10px] leading-none text-[var(--muted)] mt-1">
+          <span className="font-mono text-[10px] leading-none text-[var(--muted)]">
             now
           </span>
         </div>
 
         {/* ── Fader cap caret ────────────────────────────────────────────────── */}
-        {/* 9×15px (10×18px when dragging), radius 2px, center score line.     */}
-        {/* pointer-events-none so rail/marker interactions pass through.        */}
+        {/* Flat rectangular fader knob; pointer-events-none so rail handles input. */}
         <div
           className="absolute top-1/2 pointer-events-none"
           style={{
-            left: `${caretPosition}%`,
+            left: `${visualPosition}%`,
             transform: "translate(-50%, -50%)",
             zIndex: 10,
             transition: isDragging ? "none" : "left 90ms ease-out",
@@ -308,24 +341,25 @@ export function TimelineScrubber({
         >
           <div
             style={{
-              width: isDragging ? "10px" : "9px",
-              height: isDragging ? "18px" : "15px",
-              borderRadius: "2px",
+              width: isDragging ? "9px" : "8px",
+              height: isDragging ? "16px" : "13px",
+              borderRadius: "1px",
               background: isPast
                 ? "var(--past)"
                 : isDragging
                   ? "rgba(232,224,208,1.0)"
-                  : "rgba(232,224,208,0.88)",
+                  : "rgba(232,224,208,0.85)",
+              // Drop shadow only — no colored glow that reads as a button/pill.
               boxShadow: isPast
-                ? "0 0 10px var(--past), 0 1px 4px rgba(0,0,0,0.55)"
+                ? "0 1px 3px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)"
                 : isDragging
-                  ? "0 0 14px rgba(232,224,208,0.4), 0 2px 6px rgba(0,0,0,0.6)"
-                  : "0 1px 5px rgba(0,0,0,0.55)",
+                  ? "0 2px 5px rgba(0,0,0,0.7)"
+                  : "0 1px 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)",
               position: "relative",
               transition: "width 90ms ease-out, height 90ms ease-out",
             }}
           >
-            {/* Score / notch — one horizontal groove across the cap center */}
+            {/* Score / notch — horizontal groove across the cap center */}
             <div
               style={{
                 position: "absolute",
@@ -334,8 +368,8 @@ export function TimelineScrubber({
                 top: "50%",
                 height: "1px",
                 background: isPast
-                  ? "rgba(90,143,181,0.45)"
-                  : "rgba(0,0,0,0.22)",
+                  ? "rgba(90,143,181,0.4)"
+                  : "rgba(0,0,0,0.25)",
                 transform: "translateY(-50%)",
               }}
             />
