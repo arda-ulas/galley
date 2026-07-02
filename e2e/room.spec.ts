@@ -468,6 +468,41 @@ test("timeline: drag across two snapshots selects via pointermove", async ({
     .toContain(tokenC);
 });
 
+// ─── Timeline keyboard navigation ────────────────────────────────────────────
+
+test("timeline: keyboard ArrowLeft enters past mode; Escape returns to now", async ({
+  page,
+  roomPath,
+}) => {
+  await page.goto(roomPath);
+  await expect(page.getByText("Live")).toBeVisible();
+
+  // Create at least one snapshot so ArrowLeft has somewhere to go
+  const tokenA = `kb_a_${Date.now()}`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.type(tokenA);
+  await expect(page.getByTestId("timeline-marker").first()).toBeVisible({
+    timeout: 5000,
+  });
+
+  // Focus the rail via keyboard focus (no pointer event, no click-triggered selection)
+  await page.getByTestId("timeline-rail").focus();
+
+  // ArrowLeft from live → selects the most recent snapshot → enters past mode
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByText("Viewing the past")).toBeVisible();
+  await expect(page.getByTestId("return-to-now")).toBeVisible();
+
+  // Escape → returns to live without clicking Return to now
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("Viewing the past")).not.toBeVisible();
+
+  // Live editor is restored — typed content is still present
+  await expect
+    .poll(() => getEditorText(page), { timeout: 3000 })
+    .toContain(tokenA);
+});
+
 // ─── Step 15: past preview mode ──────────────────────────────────────────────
 
 test("past mode: click marker enters read-only past preview", async ({

@@ -202,6 +202,229 @@ describe("TimelineScrubber", () => {
     expect(onSelectNearest).not.toHaveBeenCalled();
   });
 
+  // ── Rail a11y: tabIndex / slider role / ARIA values ──────────────────────
+
+  it("empty rail has tabIndex -1 — not an inert tab stop", () => {
+    render(<TimelineScrubber markers={[]} />);
+    expect(screen.getByTestId("timeline-rail")).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("rail with markers has tabIndex 0 and slider role", () => {
+    render(<TimelineScrubber markers={[marker("a", 50)]} />);
+    const rail = screen.getByTestId("timeline-rail");
+    expect(rail).toHaveAttribute("tabindex", "0");
+    expect(rail).toHaveAttribute("role", "slider");
+    expect(rail).toHaveAttribute("aria-label", "Session timeline");
+  });
+
+  it("rail aria values in live mode reflect Now / full range", () => {
+    render(
+      <TimelineScrubber markers={[marker("a", 20), marker("b", 70)]} />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    expect(rail).toHaveAttribute("aria-valuemin", "0");
+    expect(rail).toHaveAttribute("aria-valuemax", "2");
+    expect(rail).toHaveAttribute("aria-valuenow", "2");
+    expect(rail).toHaveAttribute("aria-valuetext", "Now");
+  });
+
+  it("oldest snapshot aria-valuenow equals 0", () => {
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        selectedMarkerId="old"
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    // "old" sorts first (position 20 < 70) → sorted index 0 → aria-valuenow=0
+    expect(rail).toHaveAttribute("aria-valuenow", "0");
+    expect(rail).toHaveAttribute("aria-valuetext", "Snapshot 1 of 2");
+  });
+
+  it("newest snapshot aria-valuenow equals markers.length - 1 (distinct from live)", () => {
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        selectedMarkerId="new"
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    // "new" sorts last (index 1 = N-1 = 1) → aria-valuenow=1; live would be 2
+    expect(rail).toHaveAttribute("aria-valuenow", "1");
+    expect(rail).toHaveAttribute("aria-valuetext", "Snapshot 2 of 2");
+  });
+
+  it("empty rail has no slider role or aria-label", () => {
+    render(<TimelineScrubber markers={[]} />);
+    const rail = screen.getByTestId("timeline-rail");
+    expect(rail).not.toHaveAttribute("role");
+    expect(rail).not.toHaveAttribute("aria-label");
+  });
+
+  // ── Keyboard navigation ───────────────────────────────────────────────────
+
+  it("ArrowLeft from live calls onMarkerClick with newest snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowLeft" });
+    expect(onMarkerClick).toHaveBeenCalledWith("new");
+  });
+
+  it("ArrowLeft from past navigates to older snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+        selectedMarkerId="new"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowLeft" });
+    expect(onMarkerClick).toHaveBeenCalledWith("old");
+  });
+
+  it("ArrowRight from newest snapshot calls onReturnToNow", () => {
+    const onReturnToNow = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onReturnToNow={onReturnToNow}
+        selectedMarkerId="new"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowRight" });
+    expect(onReturnToNow).toHaveBeenCalledOnce();
+  });
+
+  it("ArrowRight from non-newest navigates to next snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+        selectedMarkerId="old"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowRight" });
+    expect(onMarkerClick).toHaveBeenCalledWith("new");
+  });
+
+  it("ArrowDown is an alias for ArrowLeft — navigates to older snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+        selectedMarkerId="new"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowDown" });
+    expect(onMarkerClick).toHaveBeenCalledWith("old");
+  });
+
+  it("ArrowUp is an alias for ArrowRight — navigates to newer snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+        selectedMarkerId="old"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowUp" });
+    expect(onMarkerClick).toHaveBeenCalledWith("new");
+  });
+
+  it("ArrowUp from newest snapshot calls onReturnToNow", () => {
+    const onReturnToNow = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onReturnToNow={onReturnToNow}
+        selectedMarkerId="new"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowUp" });
+    expect(onReturnToNow).toHaveBeenCalledOnce();
+  });
+
+  it("ArrowDown from live calls onMarkerClick with newest snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("old", 20), marker("new", 70)]}
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "ArrowDown" });
+    expect(onMarkerClick).toHaveBeenCalledWith("new");
+  });
+
+  it("Home selects the oldest snapshot", () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("mid", 50), marker("old", 10), marker("new", 80)]}
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "Home" });
+    expect(onMarkerClick).toHaveBeenCalledWith("old"); // lowest position
+  });
+
+  it("End calls onReturnToNow", () => {
+    const onReturnToNow = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("a", 50)]}
+        onReturnToNow={onReturnToNow}
+        selectedMarkerId="a"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "End" });
+    expect(onReturnToNow).toHaveBeenCalledOnce();
+  });
+
+  it("Escape calls onReturnToNow", () => {
+    const onReturnToNow = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[marker("a", 50)]}
+        onReturnToNow={onReturnToNow}
+        selectedMarkerId="a"
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId("timeline-rail"), { key: "Escape" });
+    expect(onReturnToNow).toHaveBeenCalledOnce();
+  });
+
+  it("keyboard is inert when no markers", () => {
+    const onMarkerClick = vi.fn();
+    const onReturnToNow = vi.fn();
+    render(
+      <TimelineScrubber
+        markers={[]}
+        onMarkerClick={onMarkerClick}
+        onReturnToNow={onReturnToNow}
+      />,
+    );
+    const rail = screen.getByTestId("timeline-rail");
+    fireEvent.keyDown(rail, { key: "ArrowLeft" });
+    fireEvent.keyDown(rail, { key: "ArrowRight" });
+    fireEvent.keyDown(rail, { key: "ArrowUp" });
+    fireEvent.keyDown(rail, { key: "ArrowDown" });
+    fireEvent.keyDown(rail, { key: "Home" });
+    fireEvent.keyDown(rail, { key: "End" });
+    fireEvent.keyDown(rail, { key: "Escape" });
+    expect(onMarkerClick).not.toHaveBeenCalled();
+    expect(onReturnToNow).not.toHaveBeenCalled();
+  });
+
   it("pointer down on marker button does not trigger rail drag", () => {
     const onMarkerClick = vi.fn();
     const onSelectNearest = vi.fn();

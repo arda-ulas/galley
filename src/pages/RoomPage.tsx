@@ -62,6 +62,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         <TimelineScrubber
           markers={markers}
           onMarkerClick={handleMarkerClick}
+          onReturnToNow={handleReturnToNow}
           onSelectNearest={handleMarkerClick}
           selectedMarkerId={selectedSnapshot?.id}
         />
