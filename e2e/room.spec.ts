@@ -32,6 +32,12 @@ test.beforeEach(async ({ request }) => {
   }
 });
 
+test.afterEach(async ({ page }) => {
+  if (!page.isClosed()) {
+    await page.goto("about:blank");
+  }
+});
+
 // ─── Step 12: starter code seeding ───────────────────────────────────────────
 
 test("starter code: seeds automatically on first load", async ({ page }) => {
