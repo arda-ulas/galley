@@ -1,5 +1,10 @@
 # Echo/Rewind — Task Tracker
 
+> **Archived planning notes — Week 1 complete.**
+> All phases below were completed as of 2026-07-02. The table reflects the original
+> planning state and has not been back-filled; treat it as a record of what was planned,
+> not what remains to do. The project is frozen for demo recording.
+
 Status legend: `✅ done` · `🔄 in progress` · `⬜ todo` · `⏸ blocked`
 
 ---

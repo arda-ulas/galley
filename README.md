@@ -48,8 +48,8 @@ Both tabs must show **Live** in the top bar before starting the demo.
 ## Testing
 
 ```
-npm run test          # Vitest unit tests (42 tests)
+npm run test          # Vitest unit tests (61 tests)
 npx tsc --noEmit     # TypeScript type check
 npm run build         # Production build
-npm run test:e2e      # Playwright E2E (13 tests, starts server automatically)
+npm run test:e2e      # Playwright E2E (16 tests, starts server automatically)
 ```
