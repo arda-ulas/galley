@@ -127,14 +127,16 @@ test("starter code: appears exactly once with two tabs opened concurrently", asy
 test("renders the amber room shell", async ({ page, roomPath }) => {
   await page.goto(roomPath);
 
-  // Top-bar room label
-  await expect(page.getByText(/echo \/ demo/)).toBeVisible();
+  // Top-bar room label — now rendered as echo://demo address form
+  await expect(page.getByLabel(/echo:\/\/demo/)).toBeVisible();
 
   // Connection status — Playwright starts the WS server, so this must reach Live
   await expect(page.getByText("Live")).toBeVisible();
 
-  // Share button is present and interactive
-  await expect(page.getByRole("button", { name: "Share" })).toBeVisible();
+  // Copy link button is present and interactive
+  await expect(
+    page.getByRole("button", { name: "Copy room link" }),
+  ).toBeVisible();
 
   // Local user avatar is visible
   await expect(page.getByTitle(/· You/)).toBeVisible();

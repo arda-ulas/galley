@@ -6,19 +6,30 @@ type PresenceBarProps = {
 
 export function PresenceBar({ users }: PresenceBarProps) {
   return (
-    <div className="flex -space-x-2">
-      {users.map((user) => {
+    <div className="flex items-center" style={{ paddingLeft: 2 }}>
+      {users.map((user, i) => {
         const label = user.isLocal
           ? `${user.name} · You`
           : `${user.name} · ${user.status}`;
         return (
           <div
             aria-label={label}
-            className="flex size-7 items-center justify-center rounded-full border-2 text-[10px] font-semibold text-[var(--bg)]"
+            className="grid place-items-center rounded-full transition-transform duration-[120ms] ease-in-out hover:-translate-y-px"
             key={user.id}
             style={{
+              width: 20,
+              height: 20,
+              marginLeft: i === 0 ? 0 : -4,
               background: user.color,
-              borderColor: user.isLocal ? "var(--accent)" : "var(--panel)",
+              color: "#0D0B09",
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 0.2,
+              boxShadow: user.isLocal
+                ? "0 0 0 1.5px var(--panel), 0 0 0 3px var(--accent)"
+                : "0 0 0 1.5px var(--panel)",
+              zIndex: users.length - i,
+              position: "relative",
             }}
             title={label}
           >

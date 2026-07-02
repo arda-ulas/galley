@@ -6,7 +6,7 @@ describe("App", () => {
   it("renders the demo room shell", () => {
     render(<App />);
 
-    expect(screen.getByText(/echo \/ demo/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/echo:\/\/demo/)).toBeInTheDocument();
     expect(screen.getByText(/Live|Connecting|Offline/)).toBeInTheDocument();
   });
 
