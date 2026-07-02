@@ -75,21 +75,24 @@ export function RoomPage({ roomId }: RoomPageProps) {
           {selectedSnapshot && (
             <motion.div
               animate={{ opacity: 1, y: 0 }}
-              className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--panel)] px-4 py-1.5 font-mono text-[11px] shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
-              exit={{ opacity: 0, y: -4 }}
-              initial={{ opacity: 0, y: -4 }}
+              className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] px-4 py-1.5 font-mono text-[11px] shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
+              exit={{ opacity: 0, y: 4 }}
+              initial={{ opacity: 0, y: 4 }}
               key="past-pill"
-              style={{ borderColor: "rgba(90,143,181,0.35)" }}
+              style={{
+                borderColor: "rgba(90,143,181,0.35)",
+                background: "linear-gradient(rgba(90,143,181,0.15), rgba(90,143,181,0.15)), var(--past-bg)",
+              }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               <span className="text-[var(--past)]">Viewing the past</span>
-              <span className="text-[var(--border)]" aria-hidden>·</span>
-              <span className="text-[var(--muted)]">
+              <span className="text-[rgba(90,143,181,0.35)]" aria-hidden>·</span>
+              <span className="text-[#5C7891]">
                 {formatRelative(selectedSnapshot.createdAt)}
               </span>
-              <span className="text-[var(--border)]" aria-hidden>·</span>
+              <span className="text-[rgba(90,143,181,0.35)]" aria-hidden>·</span>
               <button
-                className="text-[var(--text)] underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--panel)]"
+                className="text-[var(--text)] underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[#141D28]"
                 data-testid="return-to-now"
                 onClick={handleReturnToNow}
                 type="button"
