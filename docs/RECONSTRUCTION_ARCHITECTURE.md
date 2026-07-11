@@ -22,7 +22,7 @@ Assessed against the code on `reconstruction/collab-first`, and — for the undo
 | Awareness relay + cleanup-on-close **concept** | `y-protocols/awareness`; `removeAwarenessStates` on socket close | **Reusable** (concept; wiring restructured) |
 | CodeMirror ↔ Yjs binding (`yCollab`) | `y-codemirror.next` with `{ undoManager: false }` (undo fully disabled) | **Reusable with modification** |
 | Local-only past-preview **invariant** (D-005) | Live `Y.Doc` never mutated during preview | **Reusable (invariant only)** |
-| Past-preview **mechanism** (destroy/recreate view) | Full editor teardown per switch | **Under review — not approved** (see §16) |
+| Past-preview **mechanism** (destroy/recreate view) | Full editor teardown per switch | **Replace** (superseded by the hidden-inert live editor + separate preview; decided in §16) |
 | Snapshot recorder (`src/lib/snapshots.ts`) | 1500 ms client debounce → **unbounded** shared `Y.Array` | **Replace** |
 | Timeline scrubber + `src/lib/timeline.ts` | Permanent rail, drag scrub, markers | **Replace → historical reference only** |
 | Room routing (`App.tsx`, `room.ts`) | Hardcoded `roomId="demo"`; connects on mount | **Replace** |
@@ -36,7 +36,13 @@ Assessed against the code on `reconstruction/collab-first`, and — for the undo
 | Safe per-user undo/redo | Disabled; no native history either | **Missing** |
 | Truthful multi-state grammar | `connecting / live / offline` only | **Missing** |
 
-**Corrected counts (revision-1 error fixed):** **6 Missing** (local draft, Share, durable persistence, sheet identity, safe undo/redo, multi-state grammar) and **4 Replace** (snapshot recorder, timeline scrubber → historical, room routing, server seeding → historical), plus the server **room lifecycle/composition** which is a distinct **replace/restructure** on top of a small reusable protocol kernel.
+**Summary of what the reconstruction must build (revision-1 count wording removed):**
+- **Missing subsystems** (do not exist today): local draft phase · Share (create remote sheet + copy link) · durable persistence / retention · sheet identity · safe per-user undo/redo · truthful multi-state grammar.
+- **Replace subsystems:** snapshot recorder · timeline scrubber (→ historical reference only) · room routing · server-side seeding (→ historical reference only).
+- **Identity is replaced** (per-tab `sessionStorage` → per-sheet `localStorage`, editable name; §15).
+- **Server room lifecycle / composition is replaced or substantially restructured** (§20), on top of a small reusable protocol kernel.
+
+No single numeric total is given, because the rows above are drawn from the same inventory table and grouping them into one count would misrepresent it.
 
 **Server reclassification (do not call the current server broadly reusable):** only the Yjs sync/awareness **protocol handling** is reusable. Room lifecycle, routing, persistence, acknowledgements, validation, heartbeat, and error handling are replaced or substantially restructured (§20).
 
@@ -77,7 +83,7 @@ The product surface shows the design brief's phrases. These are the **projection
 ## 3. Local draft before Share
 
 - **Where draft text lives:** client memory only — CodeMirror state backed by an **unconnected local `Y.Doc`** (no provider). Using a real `Y.Doc` from the first keystroke lets Share hand the *exact* existing state to the server with no text round-trip and **no doc swap** (§4).
-- **Local structures:** `Y.Text("content")`; draft title/language held as client state (and mirrored into the metadata contract at Share, §12).
+- **Local structures:** `Y.Text("content")`; draft title/language held as client state (and mirrored into the metadata contract at Share, §12); **one client-owned `Awareness` instance bound to the draft `Y.Doc`**, created before Share and reused for the whole session (§4.6) — not broadcast until a provider attaches.
 - **Creation token:** a stable UUID for the pending Share attempt, stored in `sessionStorage` under a draft-scoped key (§4). Lifetime: created lazily on first Share intent (or first draft edit), reused across retries, cleared on successful commit and on starting a brand-new draft. `sessionStorage` (tab-scoped) is correct because a draft is a single-tab, pre-shared artifact.
 - **Survives reload?** **No — by design.** The product brief does not promise unsynced/local work survives reload. Reloading `/` yields a fresh empty draft. **This document adds no draft persistence** (no localStorage/IndexedDB autosave). A future "restore last draft" is a product decision requiring a brief amendment; explicitly not adopted.
 - **Remote object during draft:** none — no id, no row, no socket to a sheet.
@@ -132,6 +138,15 @@ Editing continues locally during the request; edits after the snapshot accumulat
 | Navigation while Share pending | If committed, the sheet exists and is token-recoverable; if not, nothing was created. |
 | Connection fails after sheet creation | Sheet exists and is durable; the client shows "Reconnecting…" and reconciles on reconnect; "saved" only returns once the durable vector re-covers current state. |
 
+### 4.6 Awareness continuity through Share (locked)
+
+- The client creates **one `Awareness` instance bound to the local draft `Y.Doc` before Share**, and uses **that same `Awareness` instance for the entire sheet session**.
+- **Before Share, local awareness is broadcast nowhere** — there is no provider and no socket; the awareness state (name, color, cursor) exists only in memory.
+- **On Share success, the provider is attached to the same `Y.Doc` and the same `Awareness` instance.** After attachment, the **existing** local awareness state is broadcast; no second `Awareness` instance is created during the handoff.
+- The handoff preserves the **same editor, the same external `Y.UndoManager`, selection, scroll, and awareness identity**; **no `Y.Doc`, editor, or `Awareness` teardown is allowed.** Provider attachment may require a small adapter or a construction path that accepts a pre-existing doc + awareness, but it must not reconstruct either.
+- **Awareness client identity remains per connection/tab** (§15) — the identity broadcast after attachment is the tab's identity, unchanged by the transition.
+- This continuity is covered by a **Share-transition awareness test** (§21): the same awareness client ID and identity survive the draft→shared handoff, and the local cursor is broadcast only after attachment.
+
 ---
 
 ## 5. Sheet creation vs clipboard confirmation
@@ -150,10 +165,10 @@ Truthful UI outcomes:
 | creation ✓ + copy ✓ | "Shared · link copied" → settles to the durability phrase (§6) |
 | creation ✓ + copy ✗ | "Shared" + **visible URL** + manual "Copy link" control; never claims the link is on the clipboard |
 | creation ✗ | "Couldn't share — your draft is safe here"; remain in draft |
-| sheet exists + connection pending | "Shared · connecting…" |
+| sheet exists + connection/sync pending | "Connecting…" (never `Shared · connected` until sync completes, §6/§8) |
 | sheet exists + persistence later fails | "Not saved — storage failed" (§6), distinct from any transport phrase |
 
-**Clipboard feasibility caveat:** `navigator.clipboard.writeText` requires transient user activation, which an `await` across the Share round-trip may lose. Mitigation: attempt the copy **synchronously within the click** where possible (e.g., copy an optimistic URL only after commit, or pre-warm), and always provide the manual fallback. **Clipboard behavior under real activation timing is a prototype/test requirement** (§21), not an assumed capability.
+**Clipboard feasibility caveat:** `navigator.clipboard.writeText` requires transient user activation, which an `await` across the Share round-trip may have consumed. The clipboard write may therefore **fail after the network round trip**, and the architecture treats that as an expected outcome, not an error in creation. There is **no pre-copy and no optimistic/invented URL** — the URL does not exist until the server returns the real `sheetId`. When copy fails, the product **always shows the final URL and provides a manual "Copy link" fallback**. **Real-browser clipboard behavior under this activation timing is a prototype/test requirement** (§21), not an assumed capability. Creation and clipboard outcomes remain separate (above).
 
 ---
 
@@ -188,11 +203,12 @@ Three **independent** machines. The legal UI phrase is a function of their combi
 
 | Transport | Sheet/sync | Durability vs current | Legal phrase |
 |---|---|---|---|
-| connecting | unresolved/pending | — | `Connecting…` |
-| connected | sync-complete | dirty (not covered) | `Saving…` |
-| connected | sync-complete | covered (content + metadata) | `Shared · saved` |
+| connecting | unresolved **or** sync-pending | — | `Connecting…` |
+| connected | valid, sync-pending | — | `Connecting…` |
+| connected | sync-complete | clean baseline, not yet durably covered | `Shared · connected` |
+| connected | sync-complete | dirty (content and/or metadata pending) | `Saving…` |
 | connected | sync-complete | content covered, metadata pending | `Saving…` (metadata not yet durable) |
-| connected | valid, sync-pending | — | `Shared · connected` |
+| connected | sync-complete | covered (content **and** metadata) | `Shared · saved` |
 | reconnecting | any | any | `Reconnecting…` |
 | connected | sync-complete | **persistence-failed** | `Not saved — storage failed` |
 | failed | any | any | transport-failure wording (distinct) |
@@ -200,7 +216,8 @@ Three **independent** machines. The legal UI phrase is a function of their combi
 
 **Required conclusions (locked):**
 - `provider.synced` is **not** a standing "saved" or "synced" guarantee — it is a point-in-time initial-sync fact and does not survive the next keystroke.
-- Initial sync alone supports at most **`Shared · connected`**.
+- While sheet validation **or** initial sync is still pending, the only legal phrase is **`Connecting…`** — never `Shared · connected`.
+- `Shared · connected` is legal **only after** the sheet is valid **and** initial sync is complete **and** the current (clean-baseline) state is not yet durably covered.
 - **`Saving…`** whenever the current local vector is not durably covered (including metadata).
 - **`Shared · saved`** only when the committed durable vector **subsumes** the client's current Yjs state **and** no newer metadata revision is pending.
 - **Persistence failure is a distinct state** from transport failure and must never be shown as "Reconnecting."
@@ -219,7 +236,8 @@ Three **independent** machines. The legal UI phrase is a function of their combi
 - **No update log in v1.**
 
 **Durability / engine settings (single-node local portfolio server):**
-- Journal mode **WAL**; `synchronous = NORMAL` (WAL) as the default balance of durability and throughput for a single-node local server; documented so a future operator can raise to `FULL` if the deployment context changes.
+- Journal mode **WAL**; **`PRAGMA synchronous = FULL`**. Rationale: expected write volume is low (two-person, debounced), so throughput is not the constraint; truthfulness and crash durability are. `Shared · saved` should correspond to the strongest practical embedded-store guarantee this project can reasonably provide, and `FULL` gives crash-durability at each commit under WAL.
+- **The "saved" durability envelope (precise):** `Shared · saved` means the SQLite transaction has **committed under the configured durability settings (WAL + `synchronous = FULL`)** *and* the committed state vector and metadata revision **cover the client's current state** (§8, §12). It does **not** claim immunity from arbitrary disk corruption, hardware failure, or filesystem failure. This is **durable application state, not a backup guarantee.**
 - **Parameterized statements only** (no string interpolation) — SQL-injection safe (§19).
 - A **`schema_version` table** and forward-only migrations.
 - **Per-sheet serialized write queue (mutex)**: all writes for a sheet run in revision order through one queue, so a slow/stale async write can **never** overwrite a newer committed state. A write whose base `serverRevision` is older than the committed revision is rejected/superseded.
@@ -280,8 +298,13 @@ Server-owned, retained. Derived **only from authoritative, durably committed ser
 - **Row shape:** `{ versionId, sheetId, sequenceNumber, sourceRevision, text, createdAt }`.
 - **Ordering:** `sequenceNumber` (monotonic per sheet) is the **canonical order and tie-breaker**; `createdAt` wall-clock is **display metadata only** (immune to clock skew).
 - **Dedup:** skip capture if `text` equals the most recent version's text.
-- **Cadence/coalescing:** debounced idle capture using an **injected clock** (§21); within the coalescing window, replace rather than append. Coalescing decisions are a pure function of committed revisions + injected time, so behavior is **deterministic across restart**.
-- **Crash tolerance:** a pending (not-yet-inserted) capture may be lost on crash **without violating the contract** — Recent versions is a bounded best-effort recovery surface, not an audit log.
+- **Cadence/coalescing:** debounced idle capture using an **injected clock** (§21); within the coalescing window, replace rather than append.
+- **Restart behavior (corrected — no across-restart determinism claim):**
+  - Inserted version rows remain **deterministically ordered by `sequenceNumber`**, and stored rows + their `sourceRevision` **survive restart**.
+  - A pending debounce/coalescing **window is not persisted**.
+  - A pending (not-yet-inserted) capture **may be lost on crash or restart without violating the product contract**.
+  - After restart, the **next qualifying committed revision starts a new coalescing window**; no attempt is made to reconstruct an in-memory pending timer.
+  - Recent versions is thus a bounded **best-effort recovery surface, not an audit log** — dedup, sequence ordering, and the bound all still hold.
 
 **Insertion transaction choice (decided):** version insertion occurs in a **later transaction tied to an already-committed `sourceRevision`**, *not* in the same transaction as the current-state commit. **Justification:** capture is debounced/coalesced and must reference *durable* state; binding it to the current-state commit would force a version on every persist (defeating coalescing and the bound) and would couple two different cadences. Referencing a committed `sourceRevision` keeps captures durable, coalesced, and independently paced, and makes "lose a pending capture on crash" harmless.
 
@@ -303,8 +326,24 @@ Server-owned, retained. Derived **only from authoritative, durably committed ser
 
 **Active-room contract (decided, simplest correct):**
 - **Never delete an actively connected sheet.** If a connected sheet reaches expiry, mark it **`expiry-pending`**.
-- When the **final** connection closes, expire it **unless** activity in the interim renewed `retentionExpiresAt`.
-- Expiry deletes sheet state, versions, metadata, **and** the idempotency record **coherently** (one logical cleanup), so a stale `creationToken` cannot resurrect a reaped sheet.
+- **Final expiry only after the last connection closes**, and only if interim activity did not renew `retentionExpiresAt`.
+- Retention cleanup runs through the **same per-sheet lifecycle queue/mutex** as current-state persistence, metadata writes, and version inserts — so cleanup can never interleave with a live write for that sheet.
+
+**Final-expiry sequence (serialized through the per-sheet lifecycle lock):**
+1. Acquire the per-sheet lifecycle lock.
+2. Mark the room **`closing`**.
+3. Reject new writes and new joins for this sheet.
+4. Cancel or drain pending debounce work (persistence and version-capture timers).
+5. Ensure no older queued write can commit afterward (the write queue is empty/superseded).
+6. Delete current state, metadata, versions, retention data, **and** the idempotency record in **one SQLite transaction**.
+7. Commit the deletion.
+8. Remove the in-memory room.
+9. Release resources / the lock.
+
+**Race and failure handling:**
+- A **reconnect or new join cannot race in after `closing` begins** — step 3 rejects it; such a client sees the sheet as unavailable and must treat it as a fresh lookup.
+- If cleanup **fails** (e.g., the delete transaction errors), the room is left **unavailable for new joins** and the cleanup is **retried safely** on the next sweep; partial deletion cannot occur because step 6 is a single transaction.
+- Deleting the idempotency record in the same transaction guarantees a stale `creationToken` cannot resurrect a reaped sheet.
 
 **Internal cause differentiation (kept distinct even if public copy merges some):**
 
@@ -323,10 +362,23 @@ Public copy may combine **never-existed** and **expired**; **transport outage mu
 
 Title and language are product-contract data.
 
-**Representation (decided): separate revisioned metadata, not Yjs shared types.** Title and language are low-frequency, single-authoritative fields; modeling them as CRDT text invites cursor/merge machinery they don't need and complicates the durability contract. Instead:
-- Title and language live in the **server metadata record** with a **monotonic `metadataRevision`**.
-- **Concurrent edits resolve last-writer-wins by `metadataRevision`**: a client submits a metadata change with its base revision; the server applies it, increments the revision, and broadcasts the new value + revision. A client with a stale base is superseded and re-renders the authoritative value. (This is acceptable because title/language are rarely edited and never mid-keystroke-collaborative.)
-- **Durability:** metadata writes commit under the **same durability contract** as content (§7/§8); the ack's `committedMetadataRevision` is what "saved" waits on for metadata.
+**Representation (decided): separate revisioned metadata, not Yjs shared types.** Title and language are low-frequency, single-authoritative fields; modeling them as CRDT text invites cursor/merge machinery they don't need and complicates the durability contract. Title and language live in the **server metadata record** with a **monotonic `metadataRevision`**.
+
+**Metadata state machine (explicit).** Client fields:
+- `serverMetadataRevision` — the latest revision the client has seen the server confirm.
+- `localMetadataRevision` — the client's local revision counter.
+- `pendingMetadataMutation` — the outstanding local change (value + base revision), or none.
+- current local `title` / `language`.
+
+Rules:
+1. A local metadata edit **increments `localMetadataRevision`** and **creates or replaces `pendingMetadataMutation`** (base = the client's `serverMetadataRevision`).
+2. Metadata edits made **while Share is in flight** are held and **sent after the creation response** (§4), against the sheet's initial `metadataRevision`.
+3. **Disconnected** metadata edits **remain pending locally** and are sent on reconnect.
+4. The server **accepts a mutation only when its base revision matches the current server `metadataRevision`**. On success it increments `metadataRevision`, **commits it durably** under the same contract as content (§7/§8), **broadcasts** the authoritative value + revision, and **includes `committedMetadataRevision` in the durable acknowledgement** (§8).
+5. On **stale-base rejection**, the server returns the **current authoritative value + revision**.
+6. **Conflict rule (decided — no blind auto-replay):** on rejection or a conflicting broadcast, the client **surfaces the authoritative remote value** and updates `serverMetadataRevision`, **but keeps the local pending value available for explicit reapply**. The client **must not silently drop** the local pending value, and **must not auto-replay it blindly** over the authoritative value.
+7. **`Shared · saved` is legal for metadata only when there is no `pendingMetadataMutation` and the committed `metadataRevision` covers the current local metadata state** (folds into the durability leg of §6/§8).
+
 - **Reload restore:** metadata loads from the record alongside the doc blob.
 - **Language allowlist:** language must be a member of a server-side **allowlist** (the supported syntax set); non-allowlisted values are rejected (§19).
 - **Export filename:** derived from the (sanitized) title + the allowlisted language's canonical extension. Sanitization strips path separators, control chars, and leading dots; empty/invalid titles fall back to a safe default (e.g., `untitled`). **No path-derived filesystem access** anywhere (§19).
@@ -497,7 +549,7 @@ The current server is **not** broadly reusable; it is a small reusable protocol 
 - **Test-only reset route** enabled **only** under `TEST_MODE`; reset clears **both** in-memory rooms **and** the durable test database; **no reset capability in normal mode**.
 
 **Required tests (map to Codex concerns):**
-no remote object before Share · duplicate Share · lost creation response + retry · browser refresh with pending token · edits made during Share (in-flight edits reconciled) · clipboard failure after creation · no-reload route transition · state-vector durable acknowledgement · metadata durability · persistence failure while socket stays connected · file-backed restart reopen · corrupt stored state · reconnect convergence · safe per-user undo (A/B interleave; undo across reconnect/preview/Share; reload reset) · version sequence + hard bound · retention cleanup · connected-sheet expiry (expiry-pending → final close) · invalid vs unavailable internal causes · preview focus/scroll/undo preservation · stale awareness cleanup (close + heartbeat timeout) · third-participant behavior (still rendered; keyboard list complete) · navigation away while dirty.
+no remote object before Share · duplicate Share · lost creation response + retry · browser refresh with pending token · edits made during Share (in-flight edits reconciled) · **awareness continuity through Share (same `Awareness` instance + client ID + identity survive the handoff; local cursor broadcast only after attachment)** · clipboard failure after creation · no-reload route transition · state-vector durable acknowledgement · metadata durability · **metadata state machine (stale-base rejection surfaces authoritative value, keeps local pending for explicit reapply, no blind auto-replay)** · persistence failure while socket stays connected · file-backed restart reopen · corrupt stored state · reconnect convergence · safe per-user undo (A/B interleave; undo across reconnect/preview/Share; reload reset) · version sequence + hard bound · **pending version capture lost on restart (no timer reconstruction; next committed revision starts a new window)** · retention cleanup · connected-sheet expiry (expiry-pending → final close; reconnect cannot race in after `closing`) · invalid vs unavailable internal causes · preview focus/scroll/undo preservation · stale awareness cleanup (close + heartbeat timeout) · third-participant behavior (still rendered; keyboard list complete) · navigation away while dirty.
 
 **Test layers:** unit (vitest) for pure logic (token identity, undo origin scoping, vector-subsumption, sanitizers, sequence/bound math, filename derivation); integration (node) for server + file-backed SQLite (create/reopen/restart/retention/persistence-failure/corrupt-state); Playwright for the full flows (draft→Share→saved ladder, preview preservation, jump/Back, presence); server-level ws harness for protocol/heartbeat/limits.
 
@@ -516,7 +568,7 @@ In-memory-only → **rejected** (makes "saved" and same-link reopen impossible; 
 **Locked decisions:**
 - **Hand-rolled protocol kernel: retained** (Yjs sync + awareness concepts).
 - **Server lifecycle/composition: replaced** (§20).
-- **SQLite: approved** with the §7 conditions (WAL/`NORMAL`, parameterized SQL, schema/migration table, per-sheet serialized write queue, startup reconstruction, corrupt-state handling, file-backed integration tests, size limits, metadata under the same durability contract, transactional retention/version ordering).
+- **SQLite: approved** with the §7 conditions (WAL + `synchronous = FULL`, parameterized SQL, schema/migration table, per-sheet serialized write queue, startup reconstruction, corrupt-state handling, file-backed integration tests, size limits, metadata under the same durability contract, transactional retention/version ordering). The "saved" envelope is durable application state, not a backup guarantee (§7).
 - **Persistence representation: selected** — one full encoded Yjs blob per sheet + current metadata + monotonic revision + committed vector + bounded text-only versions; **no update log** in v1.
 - **Share algorithm: selected** (§4) — idempotent token, atomic commit, preserve local `Y.Doc`/editor/edits/selection/scroll/undo, `history.pushState`, no reload; orphan-recoverable-by-token (not orphan-free).
 - **Durable acknowledgement: selected** (§8) — content + metadata vector/revision, emitted post-commit, serialized monotonic writes.
@@ -541,4 +593,4 @@ No implementation · no package changes · no auth · no ownership or revocation
 
 ---
 
-*Documentation only. No code, dependencies, scope, or repository state changed. This file is currently untracked, so `git diff -- <path>` prints nothing; `git diff --no-index --check /dev/null <path>` is used to whitespace-check it (a nonzero exit there means "files differ," not a whitespace error). Approval of the §23 open values is a prerequisite to any build work.*
+*Documentation only. No code, dependencies, or product scope changed. Approval of the §23 open values is a prerequisite to any build work.*
