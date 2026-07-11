@@ -1,5 +1,9 @@
 # Echo/Rewind — QA Checklist
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the validation checklist of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 Run this checklist before each demo or deployment. All items must pass.
 
 ---

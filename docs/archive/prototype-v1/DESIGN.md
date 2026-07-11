@@ -1,5 +1,9 @@
 # Echo/Rewind — Design System (Amber)
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the design system of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 ## Philosophy
 
 The app should feel: **warm dark, temporal, calm, precise, premium, technical, restrained.**

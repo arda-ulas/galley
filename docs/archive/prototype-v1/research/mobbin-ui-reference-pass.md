@@ -1,5 +1,9 @@
 # Echo/Rewind — Mobbin UI Reference Pass
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records design/product research for `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 > Raw Mobbin reference capture. Not all recommendations are approved for implementation.
 
 Source: Mobbin UI reference findings, consolidated 2026-07-01.

@@ -2,7 +2,7 @@
 
 This document defines how AI agents (Claude Code and subagents) should operate in this repository.
 
-> **Authority note.** Root `CLAUDE.md` and `AGENTS.md` govern active agent behavior, and `docs/PRODUCT_BRIEF.md` is the canonical product source. This guide provides workflow and handoff discipline only. The `prototype-v1` product and design documents (e.g. `docs/PROJECT_SPEC.md`, `docs/DESIGN.md`, `docs/TASKS.md`, `docs/WEEK1_PLAN.md`) are **historical** — do not treat them as active direction. Where any instruction here conflicts with the brief or the root files, those govern.
+> **Authority note.** Root `CLAUDE.md` and `AGENTS.md` govern active agent behavior, and `docs/PRODUCT_BRIEF.md` is the canonical product source. This guide provides workflow and handoff discipline only. The `prototype-v1` product and design documents (now archived under `docs/archive/prototype-v1/`, e.g. `docs/archive/prototype-v1/PROJECT_SPEC.md`, `docs/archive/prototype-v1/DESIGN.md`, `docs/archive/prototype-v1/TASKS.md`, `docs/archive/prototype-v1/WEEK1_PLAN.md`) are **historical** — do not treat them as active direction. Where any instruction here conflicts with the brief or the root files, those govern.
 
 ---
 

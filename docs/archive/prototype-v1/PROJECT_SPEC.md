@@ -1,5 +1,9 @@
 # Echo/Rewind — Project Specification
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the product specification of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 ## Identity
 
 **Echo/Rewind** is a realtime collaborative code room where users edit code together, see multiplayer presence and cursors, and scrub a timeline to rewind the coding session to any past moment.

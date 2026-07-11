@@ -1,5 +1,9 @@
 # Echo/Rewind — UI Reference Target List
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records design/product research for `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 > Raw research capture. Not all recommendations are approved for implementation.
 
 Source: Perplexity research, saved 2026-07-01.

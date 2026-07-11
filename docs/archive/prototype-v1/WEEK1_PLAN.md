@@ -1,5 +1,9 @@
 # Echo/Rewind — Week-1 Implementation Plan
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the implementation plan of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 ## Goal
 
 Ship the Week-1 demo: `/r/demo` open in two browser tabs, two visible cursors, and a scrubber that reliably reconstructs the past.

@@ -1,5 +1,9 @@
 # Echo/Rewind — Canonical Prompts
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the canonical agent prompts of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 Reference prompts for recurring agent tasks. Paste verbatim or adapt as needed.
 
 ---

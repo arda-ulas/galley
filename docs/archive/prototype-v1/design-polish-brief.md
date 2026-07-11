@@ -1,5 +1,9 @@
 # Echo/Rewind — Claude Design Polish Brief
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the design polish brief of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 ## Purpose
 
 This brief packages the outputs of `docs/design-audit.md`, `docs/design-research.md`, and `docs/research/mobbin-ui-reference-pass.md` into a single handoff document for a Claude Design `/design-sync` session. The goal is a focused visual polish pass — no new features, no architecture changes, no new dependencies — that makes the existing UI read as designed rather than assembled, specifically in time for recording the portfolio demo video.

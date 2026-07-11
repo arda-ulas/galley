@@ -1,5 +1,9 @@
 # Echo/Rewind — Portfolio Narrative
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the portfolio narrative of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 Working thesis, everywhere, always: **the timeline is the interface.** Every artifact below is built to make a reviewer feel one moment — dragging the playhead and watching code un-write itself — and to make the engineering behind that moment legible.
 
 ---

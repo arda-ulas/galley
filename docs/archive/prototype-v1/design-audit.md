@@ -1,5 +1,9 @@
 # Echo/Rewind — Design Audit
 
+> **Status: historical prototype-v1 document.**
+>
+> This file records the design audit of `prototype-v1` (`4147372`). It is preserved as historical evidence and is not active reconstruction guidance. See `docs/PRODUCT_BRIEF.md` for the canonical product definition.
+
 ## Purpose
 
 This audit translates two layers of design research — the Perplexity visual reference pass (`docs/design-research.md`) and the Mobbin direct product comparison (`docs/research/mobbin-ui-reference-pass.md`) — into a constrained, prioritized set of implementation candidates for the existing UI surfaces. It is scoped to visual polish and localized layout decisions on the surfaces that already exist. It does not introduce new product features, new routes, or new architecture.
