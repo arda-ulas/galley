@@ -6,6 +6,8 @@
 - **ARCHITECTURE.md** — prototype architecture reference; reconstruction architecture pending.
 - **DECISIONS.md** — decision log with active / superseded / historical / under-review statuses.
 - **AGENTS.md** — detailed agent workflow guidance.
+- **DESIGN_RESEARCH_PLAN.md** — active reference-collection and visual-direction synthesis plan; no final direction selected.
+- **experiments/POINT_EXPERIMENT.md** — approved Point experiment specification; prototype implementation is not yet authorized and Point is not included in v1.
 
 ## Historical
 
