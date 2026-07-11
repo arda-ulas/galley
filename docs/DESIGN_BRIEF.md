@@ -28,7 +28,7 @@ Balance target: **40% collaborative document · 35% code editor · 25% distincti
 
 ## 3. Theme system
 
-Three themes, one grammar. Every theme uses identical layout, spacing, type scale, state wording, and severity ladder; themes vary only in surface tokens and syntax palette. A component that needs redesign per theme is a defect.
+Three documented themes, one grammar. Every theme uses identical layout, spacing, type scale, state wording, and severity ladder; themes vary only in surface tokens and syntax palette. A component that needs redesign per theme is a defect.
 
 | Theme | Role | Ground | Character |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Three themes, one grammar. Every theme uses identical layout, spacing, type scal
 | **Graphite** | Technical neutral for embedding/screenshots where warmth is wrong. | Neutral gray canvas, near-white sheet | The most reserved variant |
 
 - **Shared tokens:** one token set (`--surface-canvas`, `--surface-sheet`, `--ink`, `--ink-muted`, `--rule`, `--accent-you`, `--accent-them`, `--state-caution`, `--state-danger`, syntax roles) with per-theme values. Collaborator hues and state colors keep the same *meaning* across themes and are re-tuned per theme for contrast.
-- **First implementation pass: Paper only.** Ink and Graphite are token exercises deferred until Paper ships and the token grammar is proven. No theme switcher UI in v1 unless it costs nothing.
+- **First implementation pass: Paper only.** Paper is the sole first-pass theme obligation and the portfolio identity. Ink and Graphite are documented post-Paper directions: they are not v1 blockers, not latent implementation obligations, and are built only if explicitly scheduled later. No theme switcher UI is required in v1.
 
 ## 4. Layout and hierarchy
 
@@ -66,7 +66,7 @@ Top to bottom:
 
 - **Neutral surfaces:** warm-white sheet, deeper cooler canvas, near-black ink (not `#000`), two grays (muted text, rules/disabled). Everything else must argue its way in. Reference values are set in the Figma direction and remain **tunable in build**; meanings are locked, hexes are not.
 - **Syntax strategy: ink-first.** Identifiers and most tokens stay near-ink; 3–4 muted hues at moderated saturation for keywords, strings, comments, types (register between the observed `xcode` and `atom-one-light` themes). Squint test: a screenshot reads as a black-text document with inflections, never a rainbow. Comments in gray italic. No token background fills except selection and find matches.
-- **Collaborator hues:** exactly two in play — `--accent-you` and `--accent-them`, drawn from a small contrast-verified set. Scope-limited to: caret, selection tint (low alpha), name chip dot, gutter tick, arrival edge. **Never** applied to text as authorship, never persisted into history.
+- **Collaborator hues:** the primary two-person view uses two semantic roles — `--accent-you` and `--accent-them` — drawn from a small contrast-verified set. Scope-limited to: caret, selection tint (low alpha), name chip dot, gutter tick, arrival edge. **Never** applied to text as authorship, never persisted into history. Additional guests must degrade predictably without turning this into an avatar pile or group dashboard; their exact overflow and identity treatment remains product/architecture-detail dependent.
 - **State severity colors:** healthy states carry **no color** (ink/gray text only). Caution (reconnecting / unsynced) = one amber. Danger (failed) = one red. Color always doubles a written phrase; never appears alone.
 - **Past-preview treatment:** **no color-temperature shift** (the retired Amber move is prohibited). Pastness is structural and verbal — banner, frame change, removed editing affordances. The code palette in preview is identical to live.
 - **Accessibility constraints:** all text ≥ 4.5:1 against its surface (syntax tokens included); collaborator hues ≥ 3:1 against the sheet for non-text marks and always paired with a name in text; state colors meaningless alone by design.
@@ -79,7 +79,7 @@ Slots, left to right: Title · state phrase · ● name — here ─────
 - **Filename:** derived (`title` slug + language extension, e.g. `retry-logic.ts`) and shown as quiet metadata beside the title or in the Download affordance — never a second editable field.
 - **Lifecycle state:** the truth phrase is welded to the title — a first-class header element, not a caption (see §10 for the full grammar). It is the header's signature.
 - **Collaborator control:** `● kaya — here` chip (hue dot + editable-by-owner name + activity word). Always visible while a collaborator is present; click = jump; keyboard-reachable as a list. No avatars.
-- **Share / Copy link:** while local, **Share** is the only filled, emphasized control on screen. After success it transforms in place into the standing state (`● Shared · saved`) plus a Copy link text action. The popover carries the URL field, inline `Copied!`, and the access truth (§11).
+- **Share / Copy link:** while local, **Share** is the only filled, emphasized control on screen. After success it transforms in place into the standing healthy-state slot (`● Shared · [confirmed state]`) plus a Copy link text action. The final confirmed-state wording is architecture-dependent. The popover carries the URL field, inline `Copied!`, and the access truth (§11).
 - **Versions:** one word in the operations strip (§8); never promoted to Row 1.
 - **Overflow rules (⋯):** Download, and nothing else in v1. Any candidate control must first fail the manuscript test ("would this survive on a serious paper document?") to justify hiding here; anything failing it entirely is cut, not hidden.
 
@@ -98,9 +98,9 @@ Slots, left to right: Title · state phrase · ● name — here ─────
 
 ## 9. Presence grammar
 
-Designed for **exactly two people** who are already talking elsewhere. Presence is ambient after the first seconds; nothing presence-related pulses at rest.
+Designed **primarily for two people** who are already talking elsewhere. The primary UI assumes one local user and one collaborator; this is a design priority, not a locked limit of exactly two connected clients. If additional edit-link holders join, presence must degrade predictably without introducing an avatar pile, dashboard, or broader group-collaboration surface. Exact overflow behavior remains product/architecture-detail dependent. Presence is ambient after the first seconds; nothing presence-related pulses at rest.
 
-- **Header presence:** the named chip (`● kaya — here` / `— editing`) is permanent Row-1 furniture while a collaborator is connected. Join/leave are one-line header-adjacent notices ("kaya joined"), not toasts.
+- **Header presence:** in the primary two-person view, the named chip (`● kaya — here` / `— editing`) is permanent Row-1 furniture while a collaborator is connected. Join/leave are one-line header-adjacent notices ("kaya joined"), not toasts. Additional guests may not force group-oriented chrome; their compact overflow treatment remains unresolved.
 - **Remote caret label:** their caret in `--accent-them` with a small name flag on join and on activity; the flag decays to caret-only at rest and returns on movement. **Decay timing is implementation-dependent** (prototype decides; reduced-motion shows/hides without animation).
 - **Selection:** low-alpha tint of their hue, hairline edge.
 - **Gutter marker:** their tick sits at the line containing their caret even when their caret is horizontally off-view; it moves when they move; it never persists as history.
@@ -111,21 +111,34 @@ Designed for **exactly two people** who are already talking elsewhere. Presence 
 
 ## 10. Truthful state grammar
 
-One location (welded to the title), one register (plain sentences), one ladder (ambient gray text → colored text → one-line banner). Color never alone; every change announced via live region. **Exact strings below are the approved register; strings marked ⚠ depend on sync architecture and must not be hard-finalized until the persistence model is approved.**
+One location (welded to the title), one register (plain sentences), one ladder (ambient gray text → colored text → one-line banner). Color never alone; every change announced via live region. **The visual slot, state ladder, and healthy-state presentation are locked. Exact strings marked ⚠ — including the final word after `Shared ·` — depend on sync/persistence architecture and must not be hard-finalized until that contract is approved.**
 
 | State | Phrase | Presentation |
 |---|---|---|
 | Local draft | `Local draft — not uploaded` | Gray text. No cloud iconography. The absence of remote claims *is* the design. |
 | Sharing | `Sharing…` | Share button becomes its own progress statement, in place. |
-| Shared (just now) | `Shared · link copied` → settles to `Shared · saved` | Inline beside Share; no toast. |
-| Saved / synced | `Shared · saved just now` ⚠ (wording of recency depends on sync granularity) | Gray text. Zero color. |
+| Shared (just now) | `Shared · link copied` → settles to `Shared · [confirmed state]` ⚠ | Inline beside Share; no toast. `link copied` confirms only clipboard/link creation, never persistence. |
+| Remote state confirmed | `Shared · [confirmed state]` ⚠ | Gray text. Zero color. Final wording depends on what architecture can truthfully confirm. |
 | Saving / syncing | `Saving…` ⚠ (whether a distinct visible state exists depends on architecture) | Text swap only; no spinner theater. |
 | Reconnecting | `Reconnecting — recent edits not yet saved` ⚠ (the claim about which edits are at risk must match real buffering behavior) | Amber phrase; escalates to a one-line banner under the header if prolonged. |
-| Failed / unsynced | `Not saved — connection failed. Your text is still on this page.` | Red phrase + persistent one-line banner; navigation-away warning per product brief. States what is true and what is at risk; never reassures falsely. |
+| Failed / unsynced | `Not saved — connection failed. Your text is still on this page.` ⚠ | Red phrase + persistent one-line banner; navigation-away warning per product brief. Every claim must match actual buffering and page-lifetime behavior; never reassures falsely. |
 | Viewing the past | `Viewing version from 14:32 — read-only` + `kaya is still editing live` | Full-width one-line banner replaces the phrase; content palette unshifted; see §12. |
 | Returning to current | phrase resumes; brief emphasis on the state line | Banner departs; caret restored; screen-reader announcement. |
 
 **Escalation rule (locked):** healthy states may only ever be gray text; a state may add color only when the user could lose something; a state may become a banner only when the user must act or must not be able to misunderstand.
+
+**Confirmed-state contract (architecture-dependent):** before final copy is approved, architecture must define what the healthy confirmation actually means: transport connected, an update acknowledged, content held in server memory, or content durably retained under the service policy. The interface may use only the strongest phrase that the implementation can prove. `Shared · link copied` remains valid solely as a transient copy confirmation and must not imply any of those stronger states.
+
+### Inherited required states and editor requirements
+
+These requirements come from `docs/PRODUCT_BRIEF.md`; this design brief does not redesign or de-scope them. Only their minimum presentation contract is fixed here. Implementation mechanics remain architecture-dependent where noted.
+
+- **Collaborator joining before initial sync:** show a neutral, written joining/synchronizing state and do not present the guest as live or current before that is true. Announce the transition; preserve a predictable focus target rather than moving focus when the collaborator becomes ready.
+- **Waiting alone for a collaborator:** keep the editor usable and the edit-link action available; use one quiet textual state, not an empty participant dashboard, pulse, or blocking overlay. Additional wording is tunable.
+- **Invalid or unavailable link:** present an unmistakable non-editor error state that says the sheet cannot be opened without guessing why. Provide a keyboard-first route away from the failed state; initial focus lands on its heading or primary action.
+- **Loading a historical preview:** keep the current sheet visibly non-editable or covered by an explicit loading treatment until the requested version is ready. Announce loading and completion, preserve focus within the Versions flow, and never momentarily present stale content as the selected version.
+- **Closing or navigating away with unsynced work:** warn only when the implementation can truthfully identify unsynced risk. State what may be lost without promising recovery; the native or in-product warning mechanism is architecture-dependent and must be keyboard/screen-reader operable where the platform permits.
+- **Safe per-user undo/redo:** remains required by `docs/PRODUCT_BRIEF.md` and is not de-scoped here. Standard shortcuts must not unintentionally undo collaborators' changes. No extra chrome is required unless usability testing shows it is needed; history/ownership mechanics are architecture-dependent.
 
 ## 11. Share lifecycle
 
@@ -133,14 +146,14 @@ One location (welded to the title), one register (plain sentences), one ladder (
 - **Share creates the remote sheet** and copies the edit link — one gesture. Failure leaves the draft intact on the page and says so.
 - **Copy-link confirmation:** inline `Copied!` adjacent to the URL field (quiet, no toast, no modal celebration).
 - **Access truth (locked copy pair):** `Anyone with this link can read and change this sheet.` + `Nothing was uploaded before you shared.` Optionally a retention sentence per the disclosed service policy — wording ⚠ until the retention policy is finalized.
-- **Post-share state:** Share transforms into the standing truth (`● Shared · saved`) plus a Copy link text action. The same control never claims to "manage" access — there is no revocation to manage.
+- **Post-share state:** Share transforms into the standing healthy-state slot (`● Shared · [confirmed state]`) plus a Copy link text action. Architecture determines the final truthful phrase. The same control never claims to "manage" access — there is no revocation to manage.
 - **Never claimed:** privacy, security, ownership, revocation, verified identity, permanence. The share surface may not use the words "private", "secure", or "only".
 
 ## 12. Recent versions
 
 - **Entry point:** the single word `Versions` in the operations strip. Closed cost: one word. No icon strip, no timeline chrome, ever.
 - **Empty state:** opens to `No versions yet.` (designed, not blank).
-- **List:** temporary right-side drawer; *boring on purpose*: `Current version` pinned at top, then chronological timestamp rows (`Today 14:32`), coalesced into natural groups. **No author names, no diffs, no byte counts, no named checkpoints.** Footer states the bound in words: `Older versions are not kept.` (cadence/bound/coalescing values remain product-open; the design must never imply more retention than exists).
+- **List:** temporary right-side drawer; *boring on purpose*: `Current version` pinned at top, then chronological timestamp rows (`Today 14:32`), grouped or coalesced only as the final policy permits. **No author names, no diffs, no byte counts, no named checkpoints.** Until deletion semantics are approved, the footer uses the neutral bound: `Only recent versions are available.` Cadence/bound/coalescing values remain product-open; the design must never imply more retention than exists. Stronger wording such as `Older versions are not kept.` is allowed only if architecture actually deletes those versions rather than merely hiding or withholding them.
 - **Read-only preview:** selecting a version swaps in a visibly re-framed proof sheet under the past banner — editing affordances removed, no caret, distinct frame treatment, identical code palette. Three redundant read-only signals: banner sentence, removed affordances, frame.
 - **Collaborator remains live:** the header chip stays live during preview (`kaya is still editing live`) — the locked non-disruption invariant made visible.
 - **Copy prior text:** selection is allowed in preview; `Copy this version` (full text) in the banner area + selection-copy; confirmation inline `Copied.`
@@ -161,7 +174,7 @@ One location (welded to the title), one register (plain sentences), one ladder (
 
 1. **Instrument-like controls:** the operations strip and metadata are compact, dense, hairline-bordered, mono-set — a typesetter's tools, not a toolbar.
 2. **Hairline structure:** visible 1px organization is the product's ornament. If a surface feels bland, add typographic tension or a rule — never decoration.
-3. **Candid microcopy:** the voice is plain, factual, slightly warm: "Nothing was uploaded before you shared." · "Older versions are not kept." · "Your text is still on this page." Microcopy is a personality budget line item, not filler.
+3. **Candid microcopy:** the voice is plain, factual, slightly warm: "Nothing was uploaded before you shared." · "Only recent versions are available." · "Your text is still on this page." Microcopy is a personality budget line item, not filler. Stronger storage claims require architecture evidence.
 4. **Specimen-level cursor care:** the two carets, the name flag, and the gutter tick are the product's signature glyphs — designed, reviewed, and presented (in the portfolio) as a specimen set.
 5. **Classic-software principles, no imitation:** one document = one surface; title as identity; tools subordinate; save/share as deliberate acts; states in words. Zero rendered lineage — no bevels, pinstripes, platinum, or window chrome quotes.
 6. **Old-web directness, no ASCII styling:** bluntly honest sentences and text-that-is-a-control; never ASCII art, box-drawing decoration, terminal green, or cosplay type.
@@ -183,7 +196,7 @@ One location (welded to the title), one register (plain sentences), one ladder (
 The direction must make these frames legible cold, in 30 seconds each:
 
 1. **Empty local draft** — proves localness: warm sheet, `Untitled sheet`, `Local draft — not uploaded`, code-native placeholder, Share present but unfired.
-2. **Shared live room, two cursors** — two hues, two carets, one selection, named chip, `Shared · saved`: a document two people are in, not a tool with users.
+2. **Shared live room, two cursors** — the primary two-person frame: two hues, two carets, one selection, named chip, `Shared · [confirmed state]`: a document two people are in, not a tool with users. The final confirmed-state word is architecture-dependent.
 3. **Share confirmation** — the header mid-transformation (`Shared · link copied`); must work as a cropped header strip alone.
 4. **Jump-to-collaborator** — arrival edge in their hue + emphasized remote selection + visible Back to your place control, readable as a moment in one still.
 5. **Past preview ↔ return to current** — paired frames proving the locked invariant: banner + re-framed read-only proof + `kaya is still editing live`, then the live header restored.
@@ -193,12 +206,12 @@ Every marketing-grade screenshot includes at least one live element (presence, s
 ## 17. Locked decisions
 
 1. Direction: **Typeset Sheet surface + Honest Utility state grammar**, with Studio Desk contributing only sheet-on-canvas objecthood and the collaborator-hue arrival edge.
-2. Light-first identity; **Paper is the default theme and the portfolio face**; dark exists only as the non-terminal Ink variant.
+2. Light-first identity; **Paper is the default theme, portfolio face, and sole first-pass implementation obligation**. Ink and Graphite are documented post-Paper directions only and create no v1 obligation unless explicitly scheduled later.
 3. Sheet-on-canvas object stance (hairline border, one tight shadow, matte).
 4. Two-row working header: document bar + mono operations strip, with the anatomy of §7–§8.
 5. State phrase welded to the title; the escalation ladder of §10; every state doubled in text.
 6. Ink-first syntax strategy and the squint/grayscale tests as gates.
-7. Presence = named chip + remote caret/selection + gutter tick; exactly-two hue scoping; no avatars, no attribution.
+7. Presence = named chip + remote caret/selection + gutter tick; optimized for one local user and one collaborator, with predictable additional-guest degradation left open; no avatar pile, no dashboard, no attribution.
 8. Jump/Back and arrival grammar of §9 (mechanics prototyped, grammar locked).
 9. Versions = one word in the strip; drawer + boring bounded list + read-only re-framed preview + copy-not-restore + banner-as-exit.
 10. Share grammar of §11, including the two-sentence access truth and the prohibited-claims list.
@@ -210,15 +223,17 @@ Every marketing-grade screenshot includes at least one live element (presence, s
 
 1. Final typeface(s) and licenses (criteria locked; faces auditioned in build).
 2. Final palette hex values and the full syntax token table (meanings locked; values tuned against contrast gates).
-3. Save/sync phrase details marked ⚠ in §10 (depend on the approved persistence/sync architecture).
+3. Save/sync phrase details marked ⚠ in §10, including the final `Shared · [confirmed state]` wording (depend on the approved persistence/sync architecture and what it can truthfully prove).
 4. Remote-label decay timing, arrival-cue duration, and reduced-motion equivalents (disposable prototype decides).
 5. Version cadence, bound, and coalescing values (product-brief open details; design renders whatever is chosen truthfully).
 6. Retention sentence wording in the Share surface (depends on the disclosed retention policy).
-7. Ink and Graphite token values (deferred until after the Paper pass).
+7. Ink and Graphite token values, only if either post-Paper direction is explicitly scheduled; neither is a v1 blocker or latent obligation.
 
 ## 19. Non-goals
 
-No authentication or accounts · no database/persistence work as a design requirement (architecture remains a separate, unapproved track) · no AI features · no chat or comments · no file tree or multiple files · no code execution, terminal, or deployment · no multi-room or workspace chrome · no branching or version-control semantics · no restore from versions · no permanent timeline or scrubber in any form · **no Point in v1** (prototype question only, per `docs/experiments/POINT_EXPERIMENT.md`) · no presenter/classroom modes · no mobile-first work beyond not-breaking.
+**Persistence boundary:** this design brief prescribes no persistence technology and mandates no database. Architecture must still satisfy the Product Brief's approved disclosed-retention, same-link reopenability, and truthful remote-state contract. The retention mechanism remains unresolved architecture; retention behavior is not optional product scope.
+
+No authentication or accounts · no AI features · no chat or comments · no file tree or multiple files · no code execution, terminal, or deployment · no multi-room or workspace chrome · no branching or version-control semantics · no restore from versions · no permanent timeline or scrubber in any form · **no Point in v1** (prototype question only, per `docs/experiments/POINT_EXPERIMENT.md`) · no presenter/classroom modes · no mobile-first work beyond not-breaking.
 
 ---
 
