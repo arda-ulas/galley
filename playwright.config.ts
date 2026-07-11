@@ -2,9 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  // Single worker: all tests share the same y-websocket server and the same
-  // in-memory Yjs room. Parallel execution causes cross-test awareness
-  // contamination — open pages from concurrent tests inflate the avatar count.
+  // Single worker is retained for deterministic ordering; multi-client tests
+  // arrive with M4/M7. The M1 local draft never connects, so no collaboration
+  // server is started here. In dev, Vite may open its own same-origin HMR
+  // socket; the app opens no collaboration/application socket (see draft.spec).
   workers: 1,
   reporter: "list",
   use: {
@@ -13,18 +14,10 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "npm run server",
-      port: 1234,
-      reuseExistingServer: false,
-      timeout: 10_000,
-      env: { ECHO_REWIND_TEST: "1" },
-    },
-    {
       command: "npm run dev",
-      url: "http://127.0.0.1:5173/r/demo",
+      url: "http://127.0.0.1:5173/",
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { VITE_ECHO_REWIND_E2E: "1" },
     },
   ],
   projects: [
