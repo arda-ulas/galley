@@ -1,17 +1,100 @@
 # Echo/Rewind — Codex Instructions
 
-## Project identity
+## Canonical source of truth
 
-Echo/Rewind is a flagship software engineering portfolio project.
+The active product definition is `docs/PRODUCT_BRIEF.md`.
 
-Core idea:
-A realtime collaborative code room where users can edit code together, see multiplayer presence/cursors, and scrub a timeline to rewind the coding session.
+**The timeline-first thesis is retired.** The prior framing — "A collaborative code room where the timeline is the interface" — described `prototype-v1` (tag `4147372`). It is a historical checkpoint, not the reconstruction target.
 
-Week-1 win condition:
-One room, two cursors, and a scrubber that reliably reconstructs the past.
+Before any product, design, or architecture decision: read `docs/PRODUCT_BRIEF.md`.
 
-Signature demo:
-Open `/r/demo` in two browser tabs. Type in one tab. The other updates. Presence/cursors are visible. Timeline markers appear. Drag the timeline backward. The editor enters read-only past mode and shows older code. Click `Return to now`. The live collaborative editor returns.
+Do not begin implementation work without confirming an approved active task exists and the brief has been reviewed.
+
+## Active product direction
+
+**Category:** Real-time collaborative code sharing — differentiated through lifecycle, recovery, and interaction craft, not through the baseline of anonymous joining and shared cursors.
+
+**Primary user:** A working developer already in a live call or chat with one trusted collaborator.
+
+**Primary job:** Give both people independent eyes and hands on the same self-contained code excerpt within seconds, without sharing an entire project, installing software, or handing over control.
+
+**Canonical artifact:** One shared code sheet.
+
+**Creation lifecycle:**
+- Root opens a local draft.
+- Draft code is not uploaded before Share.
+- Share creates the remote sheet and copies the edit link.
+- Anyone with the edit link can read and change the sheet.
+- Shared sheets are retained under a disclosed service policy.
+- Permanence, privacy, ownership, and verified identity must never be promised.
+
+See `docs/PRODUCT_BRIEF.md` for the full locked decisions, core loop, differentiators, and success criteria. If any summary in this file conflicts with `docs/PRODUCT_BRIEF.md`, the brief governs.
+
+## Locked v1 scope
+
+- Local draft open on root
+- Share creates a remote sheet and copies the edit link
+- One sheet, one language, document title
+- Anonymous per-sheet/per-browser guest identity
+- Presence, remote cursors, remote selections
+- Jump to collaborator with explicit keyboard-accessible Back
+- Truthful connection and saved-state — must distinguish connecting · shared-and-saved · reconnecting · unsynced · failed — never visually conflated
+- Bounded Recent versions: automatic, hidden by default, local read-only preview, copy full text from a past version — no restore, no named checkpoints, no permanent timeline chrome
+- Download/export with appropriate filename and extension
+- Syntax-aware CodeMirror editing, Find/search, safe per-user undo/redo
+
+## Experimental (prototype before including)
+
+- Deliberate "Point here" selection-adjacent interaction
+- Off-screen attention indicator
+- Ping lifetime and repeated-ping behavior
+- Reduced-motion treatment for Point
+
+Validate all Point behavior before committing it to the product.
+
+## Post-v1 (do not build now)
+
+Restore from version · named checkpoints · local recents · read-only links · continuous follow mode · duplicate from version · mobile viewing polish.
+
+## Explicit exclusions
+
+Code execution · terminal · package installation · deployment · multiple files · file tree · comments · chat · accounts · AI · autocomplete · linting · automatic formatting · presenter mode · classroom-scale collaboration.
+
+## Current prototype baseline
+
+**Status: historical implementation — not approved reconstruction architecture.**
+
+The code on this branch reflects the `prototype-v1` implementation. It is useful technical foundation but is not the approved reconstruction target. Do not treat prototype code as the specification for reconstruction.
+
+Notable prototype patterns and their reconstruction status:
+
+- `src/lib/room.ts` — module-level Y.Doc singleton, no teardown. **Under review.**
+- `server/index.mjs` — custom y-protocols WS server, single `/r/demo` room, server-side seeding. **Under review.**
+- `src/lib/snapshots.ts` — 1500ms idle-debounce snapshot recorder. **Under review** (cadence and bound are open details).
+- `src/components/CollaborativeEditor.tsx` — local-only past-preview pattern. **Preserved** — the local-only preview invariant (D-005) survives reconstruction.
+- `src/styles/tokens.css` — Amber token set. **Historical** — visual direction is undecided.
+
+Persistence, sheet identity, routing, guest identity migration, and Recent versions storage remain open architecture decisions. Do not speculatively refactor before architecture approval.
+
+**Prototype stack:** Vite · React · TypeScript · CodeMirror 6 · Yjs · y-websocket · y-codemirror.next · Tailwind · shadcn/ui · Framer Motion · Vitest · Playwright
+
+## Visual direction
+
+**Status: undecided.**
+
+"Amber" is the prototype visual system. It is historical design, not the active visual direction for reconstruction.
+
+Future design research will determine the visual direction. No visual system is active until `docs/DESIGN_DIRECTION.md` exists and is committed.
+
+Do not apply amber tokens, amber metaphors, or "film strip / session afterglow" framing to reconstruction work.
+
+## Architecture status
+
+`docs/ARCHITECTURE.md` describes `prototype-v1`. Reconstruction architecture is not yet approved.
+
+The one architectural property confirmed to survive reconstruction: the **local-only preview invariant** — viewing history never mutates the live Y.Doc (D-005).
+
+Do not speculatively refactor `room.ts`, the server, snapshot storage, or routing before architecture is approved.
 
 ## Evaluation criteria
 
@@ -19,139 +102,45 @@ Only optimize for:
 1. Employment value
 2. Aesthetic pride
 
-Do not optimize for:
-- startup potential
-- monetization
-- market size
-- customer interviews
-- growth
-- fundraising
-- enterprise sales
-
-## Week-1 must-have
-
-- `/r/demo`
-- same room open in two browser tabs
-- two visibly distinct tab identities using per-tab `sessionStorage`
-- shared CodeMirror 6 editor state via Yjs
-- awareness/presence with names, colors, connection state
-- remote cursor/selection rendering in live mode
-- full-text snapshots after edit pauses
-- bottom timeline with markers
-- click/drag timeline enters read-only past preview
-- editor visibly reconstructs older code from snapshots
-- live remote cursors hide or ghost in past mode
-- persistent `Viewing the past · [time ago]` pill
-- clear `Return to now` action
-- returning to now restores the live Yjs-bound collaborative editor
-- premium dark developer-tool shell
-
-## Explicit non-goals for week 1
-
-Do not build:
-- JavaScript execution
-- Run button
-- output console
-- output pane
-- file tree
-- editor tabs
-- multiple rooms beyond `/r/demo`
-- multi-language support
-- auth
-- database
-- durable persistence across reload
-- landing page
-- onboarding
-- command palette
-- AI
-- chat/comments
-- settings
-- mobile
-- historical cursor replay
-- full deterministic replay
-- fork button unless it actually works
-
-## Technical baseline
-
-Use:
-- Vite
-- React
-- TypeScript
-- CodeMirror 6
-- Yjs
-- y-websocket
-- y-codemirror.next
-- Tailwind
-- shadcn/ui primitives only when useful
-- Framer Motion only for small, feasible UI polish
-- Vitest
-- Playwright
+Do not optimize for: startup potential · monetization · market size · customer interviews · growth · fundraising · enterprise sales.
 
 ## Documentation rule
 
-When implementing with third-party libraries, use Context7 for current documentation before coding. Prioritize official docs for Vite, React, CodeMirror 6, Yjs, y-websocket, y-codemirror.next, Tailwind, shadcn/ui, Vitest, and Playwright.
-
-## Implementation behavior
-
-Before using or changing third-party library APIs, check current docs through Context7. Do not rely only on memory for fast-moving APIs such as CodeMirror 6, Yjs, Tailwind v4, Vite, Playwright, or shadcn/ui.
-
-## Visual direction
-
-Name: Amber
-
-The app should feel:
-warm dark, temporal, calm, precise, premium, technical, restrained.
-
-Metaphor:
-A code room with memory. The timeline feels like a film strip or session afterglow.
-
-Palette:
-- Background: `#0D0B09`
-- Surface: `#161310`
-- Border: `#2A2318`
-- Text: `#E8E0D0`
-- Muted: `#7A6850`
-- Accent amber: `#F5A623`
-- User B teal: `#5BB8A0`
-- Live green: `#6FCF97`
-- Temporal blue: `#5A8FB5`
-- Past background: `#08090F`
-
-Avoid:
-- generic Tailwind blue
-- default shadcn look
-- fake AI gradients
-- heavy glassmorphism
-- playful toy coding app
-- busy IDE chrome
-- Replit clone visuals
-- CodeSandbox clone visuals
-- overloaded dashboards
-
-## Product rules
-
-- The project is not a collaborative editor. The project is the timeline.
-- Protect the rewind mechanic above everything else.
-- Correctness of rewind beats beauty of rewind in week 1.
-- Past mode must be unmistakable: read-only, visible mode pill, visual temperature shift, and `Return to now`.
-- No dead buttons in the demo.
-- No fake output panels.
-- The editor owns the screen. The timeline owns the identity.
-- Two tabs must read as two different users, not one duplicated user.
+Before implementing with or changing third-party library APIs, use Context7 for current documentation. Do not rely only on memory for fast-moving APIs. Prioritize official docs for Vite, React, CodeMirror 6, Yjs, y-websocket, y-codemirror.next, Tailwind, shadcn/ui, Vitest, and Playwright.
 
 ## Workflow
 
-Before editing:
+**Before any meaningful code change:**
+1. Validate current behavior — run tests; read the relevant code.
+2. Review `docs/PRODUCT_BRIEF.md`.
+3. Confirm an approved active task exists.
+4. Use Context7 before touching third-party library APIs.
+5. Issue a skeptical challenge to your own implementation plan before committing meaningful changes.
+
+**Before editing a specific file:**
 1. Restate the task.
 2. Identify files to modify.
 3. Explain the acceptance criteria.
-4. Use Context7 before touching third-party library APIs.
-5. Ask only if blocked.
+4. Ask only if blocked.
 
-After editing:
-1. Run relevant tests/type checks.
+**After editing:**
+1. Run validation:
+   - `npm run test`
+   - `npx tsc --noEmit`
+   - `npm run build`
+   - `npm run test:e2e`
+   - `git diff --check`
 2. Summarize changed files.
 3. State known limitations.
 4. Suggest the next smallest task.
 
-Prefer small commits and narrow diffs.
+**Commit discipline:**
+- Prefer small commits and narrow diffs.
+- Never commit automatically unless explicitly authorized.
+- Do not bundle unrelated changes.
+
+## Checkpoint protection
+
+- `week1-demo` (`ca8bb48`) — never move
+- `prototype-v1` (`4147372`) — never move; stable historical collaboration prototype
+- Reconstruction work stays on `reconstruction/collab-first` until explicitly changed
