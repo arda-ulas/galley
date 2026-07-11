@@ -472,7 +472,7 @@ Exact final copy is governed by `DESIGN_BRIEF.md`; this section defines **which 
 |---|---|---|
 | Sheet | `id`, `schemaVersion`, `createdAt`, `lastActivityAt`, `retentionExpiresAt` | activity = edits only (§11) |
 | CurrentState | `sheetId`, `encodedState` (blob ≤ max, §19), `serverRevision`, `committedStateVector`, `updatedAt` | one per sheet |
-| Metadata | `sheetId`, `title`, `language`, `metadataRevision`, `updatedAt` | revisioned LWW (§12) |
+| Metadata | `sheetId`, `title`, `language`, `metadataRevision`, `updatedAt` | revision-checked; stale conflicts require explicit reapply (§12) |
 | Version | `versionId`, `sheetId`, `sequenceNumber`, `sourceRevision`, `text`, `createdAt` | bounded (§10) |
 | Idempotency | `creationToken` (unique), `sheetId`, `createdAt` | Share recovery (§4); deleted with the sheet (§11) |
 | SchemaVersion | migration bookkeeping | §7 |
