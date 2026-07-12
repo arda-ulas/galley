@@ -20,7 +20,14 @@
 // initialized, and any invalid / missing / corrupt / operational failure closes
 // the socket with a terminal code (4400 / 4404 / 4500 / 1011) BEFORE any room is
 // created. Live WebSocket updates are relayed between peers but are NOT persisted
-// yet (no live-durability claim).
+// yet (no live-durability claim). Every inbound frame passes a per-message
+// containment boundary: raw-frame + decoded sync/awareness size caps, then a
+// PREFLIGHT before any authoritative mutation — sync updates are validated on a
+// disposable clone of the room's current state, and awareness payloads are fully
+// decoded + JSON-validated — all inside a request-local try/catch. A malformed or
+// oversized frame therefore closes ONLY the offending socket (4400 malformed /
+// 4409 oversized) and can never crash the process, disconnect peers, or mutate
+// the authoritative room document or awareness state.
 
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
@@ -36,8 +43,14 @@ import { generateSheetId } from "./sheetId.mjs";
 import { handleCreateSheet } from "./sheets.mjs";
 import { handleBootstrapSheet } from "./bootstrap.mjs";
 import { loadValidatedSheet } from "./loadValidatedSheet.mjs";
+import { canonicalizeSubmission } from "./yjs.mjs";
 import { respondInternalError } from "./errors.mjs";
 import {
+  MAX_CANONICAL_STATE_BYTES,
+  MAX_VISIBLE_CONTENT_CODE_UNITS,
+  MAX_WS_AWARENESS_BYTES,
+  MAX_WS_FRAME_BYTES,
+  MAX_WS_SYNC_UPDATE_BYTES,
   RATE_LIMIT_IP_MAX,
   RATE_LIMIT_TOKEN_MAX,
   RATE_LIMIT_WINDOW_MS,
@@ -58,11 +71,153 @@ const WS_ROUTE = /^\/ws\/([^/?#]+)$/;
 // SQLite/Yjs internals ever leak. Client reconnect policy for terminal codes is
 // a later provider commit.
 const WS_CLOSE = Object.freeze({
-  INVALID: 4400, // malformed identifier or route
+  INVALID: 4400, // malformed identifier / route / protocol input
   NOT_FOUND: 4404, // no such sheet
   CORRUPT: 4500, // corrupt / incompatible durable state
   INTERNAL: 1011, // operational DB / internal initialization failure
+  TOO_LARGE: 4409, // oversized collaboration frame / payload
 });
+
+/**
+ * Thrown inside the per-message handler to close ONLY the offending socket with
+ * a specific private-use code. Carries no decoder/Yjs internals, so the close
+ * reason stays generic. A `4400` malformed default is used for any other
+ * (decoder) throw the handler contains.
+ */
+class WsMessageError extends Error {
+  /** @param {number} closeCode */
+  constructor(closeCode) {
+    super("ws message rejected");
+    this.name = "WsMessageError";
+    this.closeCode = closeCode;
+  }
+}
+
+/**
+ * Preflight an untrusted sync step-2/update against a DISPOSABLE clone of the
+ * room's CURRENT state, so a malformed (but length-valid) update that would make
+ * Y.applyUpdate partially mutate its target throws HERE — on the throwaway doc —
+ * and never touches the authoritative room. The clone starts from the room's
+ * current state (not an empty doc) so dependency and structural validation
+ * reflect the real merge context. On success the caller applies the SAME bytes
+ * to the authoritative doc. Nothing is persisted, normalized, or rewritten.
+ * @param {Y.Doc} doc authoritative room doc (read only here)
+ * @param {Uint8Array} update untrusted client update bytes
+ * @throws {WsMessageError} INVALID on any decode / integration / structure failure
+ */
+function preflightSyncUpdate(doc, update) {
+  const currentState = Y.encodeStateAsUpdate(doc);
+  const probe = new Y.Doc();
+  try {
+    probe.getText("content"); // predeclare the one approved root
+    Y.applyUpdate(probe, currentState); // real merge context
+    Y.applyUpdate(probe, update); // may partially mutate the PROBE then throw — contained
+    // Validate the MERGED result still satisfies the approved single-root
+    // plain-text schema, the visible-content limit, AND the same 512 KiB
+    // canonical-state envelope enforced at creation and durable validation
+    // (reuses the create/load structural helper). The per-update byte cap was
+    // already enforced by the caller; this bounds the merged ROOM state, since a
+    // small update can still push the merged canonical state (e.g. via tombstone
+    // or multi-client growth) past the room invariant.
+    canonicalizeSubmission(
+      Y.encodeStateAsUpdate(probe),
+      Y.encodeStateVector(probe),
+      {
+        maxVisibleContentCodeUnits: MAX_VISIBLE_CONTENT_CODE_UNITS,
+        maxCanonicalStateBytes: MAX_CANONICAL_STATE_BYTES,
+      },
+    );
+  } catch {
+    throw new WsMessageError(WS_CLOSE.INVALID);
+  } finally {
+    probe.destroy();
+  }
+}
+
+/**
+ * Apply one already-typed SYNC message body to `doc`, replying to step-1 and
+ * applying step-2/update bytes. Update bytes are (1) size-capped, then (2)
+ * PREFLIGHTED against a disposable clone of current room state before the
+ * authoritative apply — so a malformed update cannot mutate the authoritative
+ * room document. Throws WsMessageError for an oversized payload (4409) or any
+ * malformed/invalid sync input (4400); the caller contains it.
+ * @param {decoding.Decoder} decoder positioned just after the top-level type
+ * @param {Y.Doc} doc
+ * @param {import('ws').WebSocket} ws
+ */
+function applyWsSyncMessage(decoder, doc, ws) {
+  const subtype = decoding.readVarUint(decoder);
+  if (subtype === syncProtocol.messageYjsSyncStep1) {
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, MSG_SYNC);
+    syncProtocol.readSyncStep1(decoder, enc, doc);
+    if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
+  } else if (
+    subtype === syncProtocol.messageYjsSyncStep2 ||
+    subtype === syncProtocol.messageYjsUpdate
+  ) {
+    const update = decoding.readVarUint8Array(decoder);
+    // Reject oversize BEFORE any preflight allocation/application.
+    if (update.byteLength > MAX_WS_SYNC_UPDATE_BYTES) {
+      throw new WsMessageError(WS_CLOSE.TOO_LARGE);
+    }
+    // Validate on a throwaway clone first; malformed updates throw here and
+    // never partially mutate the authoritative doc.
+    preflightSyncUpdate(doc, update);
+    // Preflight passed, so this apply is expected not to throw; still inside the
+    // caller's try/catch defensively.
+    Y.applyUpdate(doc, update, ws);
+  } else {
+    throw new WsMessageError(WS_CLOSE.INVALID);
+  }
+}
+
+/**
+ * Fully decode and JSON-validate an ENTIRE awareness payload WITHOUT touching any
+ * Awareness state. applyAwarenessUpdate mutates entries incrementally and cannot
+ * be safely rolled back (it overwrites existing identities' state/meta), so the
+ * whole payload must be proven well-formed first: every entry's clientID, clock,
+ * and JSON state must decode and parse, and the payload must be fully consumed.
+ * Mirrors the y-protocols wire format exactly; invents no new semantics.
+ * @param {Uint8Array} update untrusted awareness payload bytes
+ * @throws {WsMessageError} INVALID on any decode / JSON / trailing-byte failure
+ */
+function preflightAwarenessUpdate(update) {
+  try {
+    const decoder = decoding.createDecoder(update);
+    const len = decoding.readVarUint(decoder);
+    for (let i = 0; i < len; i++) {
+      decoding.readVarUint(decoder); // clientID
+      decoding.readVarUint(decoder); // clock
+      JSON.parse(decoding.readVarString(decoder)); // state must be valid JSON
+    }
+    if (decoding.hasContent(decoder)) {
+      throw new Error("trailing awareness bytes");
+    }
+  } catch {
+    throw new WsMessageError(WS_CLOSE.INVALID);
+  }
+}
+
+/**
+ * Apply one already-typed AWARENESS message body to `awareness`. The payload is
+ * (1) size-capped, then (2) fully decoded + JSON-validated before the single
+ * authoritative apply — so a malformed multi-entry payload is rejected before
+ * ANY entry is applied and can neither inject a ghost identity nor overwrite an
+ * existing identity's state/meta.
+ * @param {decoding.Decoder} decoder positioned just after the top-level type
+ * @param {awarenessProtocol.Awareness} awareness
+ * @param {import('ws').WebSocket} ws
+ */
+function applyWsAwarenessMessage(decoder, awareness, ws) {
+  const update = decoding.readVarUint8Array(decoder);
+  // Reject oversize BEFORE any preflight decoding.
+  if (update.byteLength > MAX_WS_AWARENESS_BYTES) {
+    throw new WsMessageError(WS_CLOSE.TOO_LARGE);
+  }
+  preflightAwarenessUpdate(update);
+  awarenessProtocol.applyAwarenessUpdate(awareness, update, ws);
+}
 
 /**
  * Resolve server configuration from an environment object.
@@ -425,22 +580,39 @@ export async function createServerApplication(env = process.env, options = {}) {
       ws.send(encoding.toUint8Array(awEnc));
     }
 
-    ws.on("message", (rawData) => {
-      const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData);
-      const decoder = decoding.createDecoder(new Uint8Array(data));
-      const msgType = decoding.readVarUint(decoder);
+    ws.on("message", (rawData, isBinary) => {
+      // Every malformed/oversized frame is contained to THIS socket: no decoder
+      // exception escapes, the process survives, and peers / the room / durable
+      // state are untouched. Owned awareness states are cleared by 'close'.
+      try {
+        // Binary-only protocol: reject text frames explicitly.
+        if (isBinary === false) throw new WsMessageError(WS_CLOSE.INVALID);
 
-      if (msgType === MSG_SYNC) {
-        const enc = encoding.createEncoder();
-        encoding.writeVarUint(enc, MSG_SYNC);
-        syncProtocol.readSyncMessage(decoder, enc, doc, ws);
-        if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
-      } else if (msgType === MSG_AWARENESS) {
-        awarenessProtocol.applyAwarenessUpdate(
-          awareness,
-          decoding.readVarUint8Array(decoder),
-          ws,
-        );
+        const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData);
+
+        // Raw-frame size guard BEFORE any decoder work.
+        if (data.byteLength > MAX_WS_FRAME_BYTES) {
+          throw new WsMessageError(WS_CLOSE.TOO_LARGE);
+        }
+
+        // Copy into an exact-length buffer so the decoder can never read past the
+        // frame into pooled memory (Node Buffers may share a larger ArrayBuffer).
+        const decoder = decoding.createDecoder(new Uint8Array(data));
+        const msgType = decoding.readVarUint(decoder);
+
+        if (msgType === MSG_SYNC) {
+          applyWsSyncMessage(decoder, doc, ws);
+        } else if (msgType === MSG_AWARENESS) {
+          applyWsAwarenessMessage(decoder, awareness, ws);
+        }
+        // Unknown top-level types are ignored safely (no reply, no state change).
+      } catch (err) {
+        // No decoder/Yjs detail is exposed; a non-typed throw is treated as
+        // malformed. No normal protocol reply is sent after a failure — only the
+        // close frame below.
+        const code =
+          err instanceof WsMessageError ? err.closeCode : WS_CLOSE.INVALID;
+        ws.close(code, code === WS_CLOSE.TOO_LARGE ? "too large" : "invalid");
       }
     });
 
