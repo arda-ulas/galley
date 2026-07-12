@@ -25,6 +25,15 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { openDatabase, PRODUCTION_DB_PATH } from "./persistence/db.mjs";
 import { createWriteQueue } from "./persistence/writeQueue.mjs";
+import { createRateLimiter } from "./rateLimiter.mjs";
+import { generateSheetId } from "./sheetId.mjs";
+import { handleCreateSheet } from "./sheets.mjs";
+import { respondInternalError } from "./errors.mjs";
+import {
+  RATE_LIMIT_IP_MAX,
+  RATE_LIMIT_TOKEN_MAX,
+  RATE_LIMIT_WINDOW_MS,
+} from "./limits.mjs";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -109,7 +118,7 @@ export function resolveConfig(env) {
  * listening until start() is called.
  *
  * @param {NodeJS.ProcessEnv} [env]
- * @param {{ dbFaults?: object, faults?: { closeWss?: boolean }, hooks?: { beforeListen?: () => Promise<void> } }} [options] test seams (never used in production)
+ * @param {{ dbFaults?: object, faults?: { closeWss?: boolean }, hooks?: { beforeListen?: () => Promise<void> }, clock?: { now: () => number }, generateSheetId?: () => string }} [options] test seams (never used in production)
  */
 export async function createServerApplication(env = process.env, options = {}) {
   const config = resolveConfig(env);
@@ -124,6 +133,16 @@ export async function createServerApplication(env = process.env, options = {}) {
   // One process-owned write queue. Unused in commit 1 (creation lands in later
   // commits); constructed here so ownership lives with the application.
   const writeQueue = createWriteQueue();
+
+  // Process-owned create rate limiter (per IP + per creation token). The clock
+  // and id minter are injectable test seams; production uses the real ones.
+  const rateLimiter = createRateLimiter({
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    ipLimit: RATE_LIMIT_IP_MAX,
+    tokenLimit: RATE_LIMIT_TOKEN_MAX,
+    clock: options.clock ?? Date,
+  });
+  const mintSheetId = options.generateSheetId ?? generateSheetId;
 
   // Per-application in-memory rooms. Instance-scoped (not module-level) so tests
   // can run isolated applications and shutdown() can deterministically release
@@ -228,9 +247,17 @@ export async function createServerApplication(env = process.env, options = {}) {
       return;
     }
     if (req.method === "POST" && req.url === "/api/sheets") {
-      // Placeholder until the validated create API lands (commit 3).
-      res.writeHead(501, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "not_implemented" }));
+      handleCreateSheet(req, res, {
+        db,
+        rateLimiter,
+        generateSheetId: mintSheetId,
+      }).catch((err) => {
+        // The handler owns its own error responses; this is a last-resort guard
+        // so an unexpected throw never leaves the socket hanging. Uses the safe
+        // centralized responder so it can never double-end.
+        console.error("create-sheet dispatch error:", err);
+        respondInternalError(res);
+      });
       return;
     }
     res.writeHead(404);
@@ -422,7 +449,8 @@ export async function createServerApplication(env = process.env, options = {}) {
       errors,
     );
 
-    // 6. Clear limiter state when present (no limiter until commit 3).
+    // 6. Clear rate-limiter state.
+    await runCleanupStep("clear-rate-limiter", () => rateLimiter.clear(), errors);
 
     // 7. Close SQLite LAST — always attempted, even if earlier steps failed.
     //    db.close() is idempotent (a no-op once closed), so retries are safe.
@@ -521,6 +549,7 @@ export async function createServerApplication(env = process.env, options = {}) {
     config,
     db,
     writeQueue,
+    rateLimiter,
     // Test seams — never used by production callers.
     rooms,
     getRoom,
