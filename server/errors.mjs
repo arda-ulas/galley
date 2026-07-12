@@ -17,6 +17,7 @@ export const ERROR_CODES = Object.freeze({
   UNSUPPORTED_LANGUAGE: "unsupported_language",
   UNSUPPORTED_SCHEMA_VERSION: "unsupported_schema_version",
   RATE_LIMITED: "rate_limited",
+  NOT_FOUND: "not_found",
   INTERNAL_ERROR: "internal_error",
 });
 

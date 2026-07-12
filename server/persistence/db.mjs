@@ -329,6 +329,24 @@ function prepareStatements(db) {
     selectSheet: db.prepare(
       "SELECT id, server_revision, state, state_vector, updated_at FROM sheets WHERE id = ?",
     ),
+    // Joined sheet + metadata read for the validated-load boundary. LEFT JOIN so
+    // a sheet whose metadata row is missing (corruption) is distinguishable from
+    // an absent sheet (no row at all).
+    selectSheetRecord: db.prepare(
+      `SELECT s.id                       AS id,
+              s.server_revision          AS server_revision,
+              s.state                    AS state,
+              s.state_vector             AS state_vector,
+              s.created_at               AS created_at,
+              s.document_schema_version  AS document_schema_version,
+              m.sheet_id                 AS meta_present,
+              m.title                    AS title,
+              m.language                 AS language,
+              m.metadata_revision        AS metadata_revision
+         FROM sheets s
+         LEFT JOIN metadata m ON m.sheet_id = s.id
+        WHERE s.id = ?`,
+    ),
 
     // Durable-create (M3) statements.
     // Idempotency stores the full immutable creation receipt; replay reads it.
@@ -868,6 +886,34 @@ export function openDatabase(path, options = {}) {
     },
 
     /**
+     * Joined sheet + metadata read for the validated-load boundary. Returns RAW
+     * stored revision/timestamp values (no coercion) so the validator can apply
+     * strict type checks; `hasMetadata` distinguishes durable corruption (sheet
+     * present, metadata row gone) from an absent sheet (null).
+     * @param {string} sheetId
+     * @returns {{ id: string, serverRevision: unknown, state: Uint8Array | null,
+     *   stateVector: Uint8Array | null, createdAt: unknown, documentSchemaVersion: unknown,
+     *   hasMetadata: boolean, title: unknown, language: unknown, metadataRevision: unknown } | null}
+     */
+    getSheetRecord(sheetId) {
+      assertUsable();
+      const row = stmts.selectSheetRecord.get(sheetId);
+      if (!row) return null;
+      return {
+        id: row.id,
+        serverRevision: row.server_revision,
+        state: row.state ?? null,
+        stateVector: row.state_vector ?? null,
+        createdAt: row.created_at,
+        documentSchemaVersion: row.document_schema_version,
+        hasMetadata: row.meta_present != null,
+        title: row.title ?? null,
+        language: row.language ?? null,
+        metadataRevision: row.metadata_revision ?? null,
+      };
+    },
+
+    /**
      * Idempotent explicit close. Marks closed only after `db.close()` succeeds;
      * a close failure propagates and leaves the adapter retryable. A poisoned
      * adapter can still be closed.
@@ -904,6 +950,17 @@ export function openDatabase(path, options = {}) {
       failNextReceiptReadWith(error) {
         receiptReadFaultArmed = true;
         receiptReadFaultError = error;
+      },
+      /**
+       * Test-only durable reset: delete every sheet in one transaction. The
+       * metadata and idempotency rows clear via ON DELETE CASCADE. Operates
+       * through the active adapter — it never closes/reopens the database or
+       * touches migrations, leaving the adapter ready for the next test.
+       */
+      resetAll() {
+        runExclusive(() => {
+          db.exec("DELETE FROM sheets;");
+        });
       },
       state() {
         return state;

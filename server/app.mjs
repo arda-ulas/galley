@@ -29,6 +29,7 @@ import { createWriteQueue } from "./persistence/writeQueue.mjs";
 import { createRateLimiter } from "./rateLimiter.mjs";
 import { generateSheetId } from "./sheetId.mjs";
 import { handleCreateSheet } from "./sheets.mjs";
+import { handleBootstrapSheet } from "./bootstrap.mjs";
 import { respondInternalError } from "./errors.mjs";
 import {
   RATE_LIMIT_IP_MAX,
@@ -190,11 +191,21 @@ export async function createServerApplication(env = process.env, options = {}) {
       req.method === "POST" &&
       req.url === "/__test/reset"
     ) {
-      // Destroy every room's Yjs resources (not just drop the map entries)
-      // before responding, so a reset cannot leak docs/awareness.
+      // Durable test reset, in order: dispose live rooms (destroying each
+      // Awareness/Y.Doc) → clear all durable sheet rows (metadata + idempotency
+      // clear via FK cascade) → clear rate-limiter state. Test mode only. A
+      // durable-delete failure is contained: it returns one generic 500, leaves
+      // the limiter untouched, and never escapes the request callback.
       disposeAllRooms();
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end("ok");
+      try {
+        db.__test.resetAll();
+        rateLimiter.clear(); // only after the durable deletion succeeds
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok");
+      } catch (err) {
+        console.error("test reset failed:", err);
+        respondInternalError(res);
+      }
       return;
     }
     if (req.method === "POST" && req.url === "/api/sheets") {
@@ -209,6 +220,15 @@ export async function createServerApplication(env = process.env, options = {}) {
         console.error("create-sheet dispatch error:", err);
         respondInternalError(res);
       });
+      return;
+    }
+    // Read-only bootstrap: GET /api/sheets/<sheetId>, EXACT single segment only
+    // (no query string, no extra subpath — those fall through to 404). A matched
+    // segment is validated by loadValidatedSheet (malformed id → 400).
+    const bootstrapMatch =
+      req.method === "GET" && /^\/api\/sheets\/([^/?#]+)$/.exec(req.url ?? "");
+    if (bootstrapMatch) {
+      handleBootstrapSheet(req, res, { db }, bootstrapMatch[1]);
       return;
     }
     res.writeHead(404);
