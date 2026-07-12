@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { writeFileSync, readFileSync } from "node:fs";
-import { openDatabase, TransactionRollbackError } from "./db.mjs";
+import {
+  MissingSheetError,
+  openDatabase,
+  TransactionRollbackError,
+} from "./db.mjs";
 import { LATEST_VERSION } from "./migrations.mjs";
 import { assertFileBacked, createTempDb } from "./tmpDb.mjs";
 
@@ -14,6 +18,22 @@ async function tmp() {
 afterEach(async () => {
   while (temps.length) await temps.pop().cleanup();
 });
+
+// persistState is update-only, so tests that need an existing sheet create one
+// first through the durable-create path.
+let seedCounter = 0;
+function seed(db, sheetId, state = new Uint8Array([0])) {
+  return db.createSheet({
+    sheetId,
+    creationToken: `seed-${sheetId}-${seedCounter++}`,
+    canonicalUpdate: state,
+    canonicalStateVector: new Uint8Array([0]),
+    title: "",
+    language: "plaintext",
+    schemaVersion: 0,
+    committedAt: 1,
+  });
+}
 
 describe("openDatabase — initialization & durability enforcement", () => {
   it("sets and verifies WAL + synchronous=FULL, migrates, on a real file", async () => {
@@ -100,7 +120,7 @@ describe("openDatabase — initialization & durability enforcement", () => {
   it("survives graceful close/reopen: data, pragmas, and version persist", async () => {
     const t = await tmp();
     const a = openDatabase(t.dbPath);
-    a.persistState("sheet-x", { state: new Uint8Array([7, 7, 7]) });
+    seed(a, "sheet-x", new Uint8Array([7, 7, 7]));
     a.close();
 
     const b = openDatabase(t.dbPath);
@@ -119,20 +139,19 @@ describe("openDatabase — initialization & durability enforcement", () => {
 });
 
 describe("repository — current-state foundation", () => {
-  it("starts at revision 1 and increments by exactly 1; round-trips blobs", async () => {
+  it("creates at revision 1 and increments by exactly 1 on update; round-trips blobs", async () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
-      const r1 = db.persistState("a", {
-        state: new Uint8Array([10, 20]),
-        stateVector: new Uint8Array([1]),
-      });
+      const created = seed(db, "a", new Uint8Array([10, 20]));
       const r2 = db.persistState("a", { state: new Uint8Array([30]) });
-      expect(r1.serverRevision).toBe(1);
+      const r3 = db.persistState("a", { state: new Uint8Array([40]) });
+      expect(created.serverRevision).toBe(1);
       expect(r2.serverRevision).toBe(2);
+      expect(r3.serverRevision).toBe(3);
       const sheet = db.getSheet("a");
-      expect(sheet.serverRevision).toBe(2);
-      expect([...sheet.state]).toEqual([30]);
+      expect(sheet.serverRevision).toBe(3);
+      expect([...sheet.state]).toEqual([40]);
     } finally {
       db.close();
     }
@@ -142,7 +161,8 @@ describe("repository — current-state foundation", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
-      const r = db.persistState("n"); // no payload
+      seed(db, "n", new Uint8Array([5]));
+      const r = db.persistState("n"); // no payload → nulls state + vector
       const sheet = db.getSheet("n");
       expect(sheet.state).toBeNull();
       expect(sheet.stateVector).toBeNull();
@@ -154,16 +174,32 @@ describe("repository — current-state foundation", () => {
     }
   });
 
+  it("persistState on an unknown sheet throws MissingSheetError and writes nothing", async () => {
+    const t = await tmp();
+    const db = openDatabase(t.dbPath);
+    try {
+      expect(() => db.persistState("ghost", { state: new Uint8Array([1]) })).toThrow(
+        MissingSheetError,
+      );
+      expect(db.getSheet("ghost")).toBeNull();
+      expect(db.__test.state()).toBe("idle"); // clean rollback, still usable
+    } finally {
+      db.close();
+    }
+  });
+
   it("groups multiple tx writes atomically (commit)", async () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "a");
+      seed(db, "b");
       db.inTransaction((tx) => {
         tx.persistState("a", { state: new Uint8Array([1]) });
         tx.persistState("b", { state: new Uint8Array([2]) });
       });
-      expect(db.getSheet("a").serverRevision).toBe(1);
-      expect(db.getSheet("b").serverRevision).toBe(1);
+      expect(db.getSheet("a").serverRevision).toBe(2);
+      expect(db.getSheet("b").serverRevision).toBe(2);
     } finally {
       db.close();
     }
@@ -173,6 +209,8 @@ describe("repository — current-state foundation", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "c", new Uint8Array([9]));
+      seed(db, "d", new Uint8Array([9]));
       expect(() =>
         db.inTransaction((tx) => {
           tx.persistState("c", { state: new Uint8Array([1]) });
@@ -180,8 +218,11 @@ describe("repository — current-state foundation", () => {
           throw new Error("group boom");
         }),
       ).toThrow("group boom");
-      expect(db.getSheet("c")).toBeNull();
-      expect(db.getSheet("d")).toBeNull();
+      // Both revert to their created revision/state — the updates rolled back.
+      expect(db.getSheet("c").serverRevision).toBe(1);
+      expect([...db.getSheet("c").state]).toEqual([9]);
+      expect(db.getSheet("d").serverRevision).toBe(1);
+      expect([...db.getSheet("d").state]).toEqual([9]);
     } finally {
       db.close();
     }
@@ -193,8 +234,9 @@ describe("transaction model — non-nested, tx-scoped, poison-safe", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "s");
       const rev = db.inTransaction((tx) => tx.persistState("s", {}).serverRevision);
-      expect(rev).toBe(1);
+      expect(rev).toBe(2);
       expect(db.__test.state()).toBe("idle");
     } finally {
       db.close();
@@ -205,9 +247,10 @@ describe("transaction model — non-nested, tx-scoped, poison-safe", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "s");
       expect(() => db.inTransaction(() => { throw new Error("x"); })).toThrow("x");
       expect(db.__test.state()).toBe("idle");
-      expect(db.persistState("s", {}).serverRevision).toBe(1);
+      expect(db.persistState("s", {}).serverRevision).toBe(2);
     } finally {
       db.close();
     }
@@ -271,13 +314,14 @@ describe("transaction model — non-nested, tx-scoped, poison-safe", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "s");
       db.__test.failNextBegin();
       expect(() => db.inTransaction((tx) => tx.persistState("s", {}))).toThrow(
         /injected BEGIN/i,
       );
       expect(db.__test.state()).toBe("idle");
       // subsequent work is fine
-      expect(db.persistState("s", {}).serverRevision).toBe(1);
+      expect(db.persistState("s", {}).serverRevision).toBe(2);
     } finally {
       db.close();
     }
@@ -287,6 +331,7 @@ describe("transaction model — non-nested, tx-scoped, poison-safe", () => {
     const t = await tmp();
     const db = openDatabase(t.dbPath);
     try {
+      seed(db, "s");
       db.__test.failNextCommit();
       expect(() => db.persistState("s", {})).toThrow(/injected COMMIT/i);
       expect(db.__test.state()).toBe("poisoned");
@@ -445,6 +490,7 @@ describe("transaction capability — escaped tx handles are rejected", () => {
     const db = openDatabase(t.dbPath);
     try {
       let escaped;
+      seed(db, "p");
       db.inTransaction((tx) => {
         escaped = tx;
       });

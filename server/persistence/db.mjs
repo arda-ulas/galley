@@ -30,6 +30,8 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { LATEST_VERSION, MIGRATIONS } from "./migrations.mjs";
+import { isValidSheetId } from "../sheetId.mjs";
+import { decodeStateVectorStrict, YjsValidationError } from "../yjs.mjs";
 
 // PRAGMA values cannot be parameter-bound by SQLite, so this fixed integer
 // constant is interpolated. It is a compile-time constant, never user input.
@@ -71,6 +73,43 @@ export class TransactionRollbackError extends Error {
     this.rollbackError = rollbackError;
     // Standard `cause` (any value permitted) mirrors `original`.
     this.cause = original;
+  }
+}
+
+/**
+ * Thrown by createSheet when a freshly-minted candidate sheet id already exists.
+ * Astronomically unlikely (96-bit random ids); the caller mints a new id and
+ * retries the whole atomic attempt.
+ */
+export class SheetIdCollisionError extends Error {
+  /** @param {string} sheetId */
+  constructor(sheetId) {
+    super(`sheet id already exists: ${sheetId}`);
+    this.name = "SheetIdCollisionError";
+    this.sheetId = sheetId;
+  }
+}
+
+/** Thrown when an update-only write targets a sheet that does not exist. */
+export class MissingSheetError extends Error {
+  /** @param {string} sheetId */
+  constructor(sheetId) {
+    super(`sheet does not exist: ${sheetId}`);
+    this.name = "MissingSheetError";
+    this.sheetId = sheetId;
+  }
+}
+
+/**
+ * Thrown when a stored creation receipt (or the rows it references) fails an
+ * integrity invariant on replay. Carries a safe internal message only — never
+ * raw SQLite text.
+ */
+export class PersistenceIntegrityError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(message);
+    this.name = "PersistenceIntegrityError";
   }
 }
 
@@ -281,17 +320,42 @@ function prepareStatements(db) {
     selectRevision: db.prepare(
       "SELECT server_revision FROM sheets WHERE id = ?",
     ),
-    upsertSheet: db.prepare(
-      `INSERT INTO sheets (id, server_revision, state, state_vector, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         server_revision = excluded.server_revision,
-         state           = excluded.state,
-         state_vector    = excluded.state_vector,
-         updated_at      = excluded.updated_at`,
+    // Update-only: never creates a row (createSheet owns creation).
+    updateSheetState: db.prepare(
+      `UPDATE sheets
+          SET server_revision = ?, state = ?, state_vector = ?, updated_at = ?
+        WHERE id = ?`,
     ),
     selectSheet: db.prepare(
       "SELECT id, server_revision, state, state_vector, updated_at FROM sheets WHERE id = ?",
+    ),
+
+    // Durable-create (M3) statements.
+    // Idempotency stores the full immutable creation receipt; replay reads it.
+    selectIdempotency: db.prepare(
+      `SELECT creation_token, sheet_id, server_revision_at_create,
+              committed_state_vector_at_create, committed_metadata_revision_at_create,
+              committed_at
+         FROM idempotency WHERE creation_token = ?`,
+    ),
+    selectSheetExists: db.prepare("SELECT 1 AS present FROM sheets WHERE id = ?"),
+    selectMetadataExists: db.prepare(
+      "SELECT 1 AS present FROM metadata WHERE sheet_id = ?",
+    ),
+    insertSheet: db.prepare(
+      `INSERT INTO sheets
+         (id, server_revision, state, state_vector, updated_at, created_at, document_schema_version)
+       VALUES (?, 1, ?, ?, ?, ?, ?)`,
+    ),
+    insertMetadata: db.prepare(
+      `INSERT INTO metadata (sheet_id, title, language, metadata_revision, updated_at)
+       VALUES (?, ?, ?, 1, ?)`,
+    ),
+    insertIdempotency: db.prepare(
+      `INSERT INTO idempotency
+         (creation_token, sheet_id, server_revision_at_create,
+          committed_state_vector_at_create, committed_metadata_revision_at_create, committed_at)
+       VALUES (?, ?, 1, ?, 1, ?)`,
     ),
   };
 }
@@ -337,6 +401,31 @@ export function openDatabase(path, options = {}) {
     }
     return false;
   };
+  // One-shot fault (test-only) that throws inside createSheet immediately after
+  // a chosen insert, to prove the transaction rolls back leaving no partial rows.
+  /** @type {'sheet'|'metadata'|'idempotency'|null} */
+  let createFaultAfter = null;
+  /** @param {'sheet'|'metadata'|'idempotency'} step */
+  const takeCreateFault = (step) => {
+    if (createFaultAfter === step) {
+      createFaultAfter = null;
+      return true;
+    }
+    return false;
+  };
+  // One-shot fault (test-only) that throws a caller-supplied error AT the
+  // receipt read, to prove the narrow catch converts only out-of-range reads and
+  // rethrows every other operational error unchanged.
+  let receiptReadFaultArmed = false;
+  /** @type {unknown} */
+  let receiptReadFaultError = null;
+  const takeReceiptReadFault = () => {
+    if (!receiptReadFaultArmed) return null;
+    receiptReadFaultArmed = false;
+    const error = receiptReadFaultError;
+    receiptReadFaultError = null;
+    return { error };
+  };
 
   function assertUsable() {
     if (state === "poisoned") {
@@ -345,6 +434,98 @@ export function openDatabase(path, options = {}) {
       );
     }
     if (state === "closed") throw new Error("adapter is closed");
+  }
+
+  /**
+   * Validate a stored creation receipt and return the replay representation.
+   *
+   * Integrity model: atomic creation establishes the receipt→sheet→metadata
+   * relationship under normal operation. Replay re-checks only that the stored
+   * receipt is internally well-formed (id shape, exact revisions, sane
+   * timestamp, syntactically valid state vector) and that the referenced rows
+   * still exist. It does NOT — and cannot — prove the stored vector is
+   * historically related to the current sheet; arbitrary internally-consistent
+   * DB tampering is outside the durability promise. Any failed invariant is a
+   * PersistenceIntegrityError (safe message, no SQLite/parser internals) rather
+   * than an incidental TypeError. Read-only: the surrounding transaction rolls
+   * back cleanly and the adapter stays usable.
+   * @param {Record<string, unknown>} receipt
+   */
+  function replayFromReceipt(receipt) {
+    const sheetId = receipt.sheet_id;
+    const revision = receipt.server_revision_at_create;
+    const metadataRevision = receipt.committed_metadata_revision_at_create;
+    const committedAt = receipt.committed_at;
+    const vector = receipt.committed_state_vector_at_create;
+
+    // Shape validation first (raw types, no coercion), then FK existence.
+    if (!isValidSheetId(sheetId)) {
+      throw new PersistenceIntegrityError(
+        "creation receipt has an invalid sheet id",
+      );
+    }
+    if (
+      typeof revision !== "number" ||
+      !Number.isSafeInteger(revision) ||
+      revision !== 1
+    ) {
+      throw new PersistenceIntegrityError(
+        "creation receipt has an invalid server revision",
+      );
+    }
+    if (
+      typeof metadataRevision !== "number" ||
+      !Number.isSafeInteger(metadataRevision) ||
+      metadataRevision !== 1
+    ) {
+      throw new PersistenceIntegrityError(
+        "creation receipt has an invalid metadata revision",
+      );
+    }
+    if (
+      typeof committedAt !== "number" ||
+      !Number.isSafeInteger(committedAt) ||
+      committedAt < 0
+    ) {
+      throw new PersistenceIntegrityError(
+        "creation receipt has an invalid timestamp",
+      );
+    }
+    if (!(vector instanceof Uint8Array)) {
+      throw new PersistenceIntegrityError(
+        "creation receipt has an invalid state vector",
+      );
+    }
+    // The stored vector must at least be a syntactically valid state vector.
+    try {
+      decodeStateVectorStrict(vector);
+    } catch (err) {
+      if (err instanceof YjsValidationError) {
+        throw new PersistenceIntegrityError(
+          "creation receipt has an invalid state vector",
+        );
+      }
+      throw err;
+    }
+    if (!stmts.selectSheetExists.get(sheetId)) {
+      throw new PersistenceIntegrityError(
+        "creation receipt references a missing sheet",
+      );
+    }
+    if (!stmts.selectMetadataExists.get(sheetId)) {
+      throw new PersistenceIntegrityError(
+        "creation receipt references missing metadata",
+      );
+    }
+
+    return {
+      sheetId,
+      serverRevision: revision,
+      committedStateVector: vector,
+      committedMetadataRevision: metadataRevision,
+      committedAt,
+      alreadyExisted: true,
+    };
   }
 
   /** Build a fresh transaction-scoped repository bound to `token`. */
@@ -364,19 +545,112 @@ export function openDatabase(path, options = {}) {
        */
       persistState(sheetId, payload = {}) {
         guard();
-        const stateBlob = payload.state ?? null;
-        const stateVector = payload.stateVector ?? null;
+        // Update-only: the sheet must already exist (createSheet owns creation).
         const row = stmts.selectRevision.get(sheetId);
-        const nextRevision = (row ? Number(row.server_revision) : 0) + 1;
+        if (!row) throw new MissingSheetError(sheetId);
+        const nextRevision = Number(row.server_revision) + 1;
         const updatedAt = Date.now();
-        stmts.upsertSheet.run(
-          sheetId,
+        stmts.updateSheetState.run(
           nextRevision,
-          stateBlob,
-          stateVector,
+          payload.state ?? null,
+          payload.stateVector ?? null,
           updatedAt,
+          sheetId,
         );
         return { serverRevision: nextRevision, updatedAt };
+      },
+
+      /**
+       * Atomically create one durable sheet (current state + metadata +
+       * idempotency) at server revision 1. Idempotent by creation token: a
+       * repeat token returns the originally committed representation instead of
+       * inserting again. A pre-existing candidate id throws
+       * SheetIdCollisionError so the caller can retry with a fresh id.
+       * @param {{
+       *   sheetId: string,
+       *   creationToken: string,
+       *   canonicalUpdate: Uint8Array | null,
+       *   canonicalStateVector: Uint8Array,
+       *   title: string,
+       *   language: string,
+       *   schemaVersion: number,
+       *   committedAt: number,
+       * }} params
+       */
+      createSheet(params) {
+        guard();
+        const {
+          sheetId,
+          creationToken,
+          canonicalUpdate,
+          canonicalStateVector,
+          title,
+          language,
+          schemaVersion,
+          committedAt,
+        } = params;
+
+        // Idempotent replay: the token already has an immutable receipt → return
+        // exactly the receipt values (never the mutable current state/metadata).
+        // A tampered integer too large to materialize as a JS number surfaces as
+        // a RangeError(ERR_OUT_OF_RANGE) here → treat ONLY that as receipt
+        // corruption. Every other error (SQLite, I/O, locking, operational) is a
+        // genuine operational failure and must propagate unchanged.
+        let receipt;
+        try {
+          const fault = takeReceiptReadFault();
+          if (fault) throw fault.error;
+          receipt = stmts.selectIdempotency.get(creationToken);
+        } catch (err) {
+          if (err instanceof RangeError && err.code === "ERR_OUT_OF_RANGE") {
+            throw new PersistenceIntegrityError(
+              "creation receipt could not be read",
+            );
+          }
+          throw err;
+        }
+        if (receipt) return replayFromReceipt(receipt);
+
+        // Candidate id must be unused.
+        if (stmts.selectSheet.get(sheetId)) {
+          throw new SheetIdCollisionError(sheetId);
+        }
+
+        stmts.insertSheet.run(
+          sheetId,
+          canonicalUpdate ?? null,
+          canonicalStateVector,
+          committedAt,
+          committedAt,
+          schemaVersion,
+        );
+        if (takeCreateFault("sheet")) {
+          throw new Error("injected failure after sheet insert");
+        }
+        stmts.insertMetadata.run(sheetId, title, language, committedAt);
+        if (takeCreateFault("metadata")) {
+          throw new Error("injected failure after metadata insert");
+        }
+        // Write the immutable creation receipt in the same transaction. The
+        // committed state vector is captured here and is NOT NULL by schema.
+        stmts.insertIdempotency.run(
+          creationToken,
+          sheetId,
+          canonicalStateVector,
+          committedAt,
+        );
+        if (takeCreateFault("idempotency")) {
+          throw new Error("injected failure after idempotency insert");
+        }
+
+        return {
+          sheetId,
+          serverRevision: 1,
+          committedStateVector: canonicalStateVector,
+          committedMetadataRevision: 1,
+          committedAt,
+          alreadyExisted: false,
+        };
       },
     };
   }
@@ -557,13 +831,23 @@ export function openDatabase(path, options = {}) {
     },
 
     /**
-     * Convenience: persist one sheet's state in its own transaction. Rejected if
-     * called while a transaction is in progress — use `tx.persistState` instead.
+     * Update-only: persist new state for an EXISTING sheet in its own
+     * transaction (throws MissingSheetError if the sheet does not exist).
+     * Rejected while a transaction is in progress — use `tx.persistState`.
      * @param {string} sheetId
      * @param {{ state?: Uint8Array | null, stateVector?: Uint8Array | null }} [payload]
      */
     persistState(sheetId, payload = {}) {
       return runExclusive((tx) => tx.persistState(sheetId, payload));
+    },
+
+    /**
+     * Atomically create one durable sheet in its own BEGIN IMMEDIATE
+     * transaction. Returns only after COMMIT. The write queue is not involved.
+     * @param {Parameters<ReturnType<typeof makeTx>["createSheet"]>[0]} params
+     */
+    createSheet(params) {
+      return runExclusive((tx) => tx.createSheet(params));
     },
 
     /**
@@ -611,6 +895,15 @@ export function openDatabase(path, options = {}) {
       },
       failNextClose() {
         testFaults.close = true;
+      },
+      /** Arm a one-shot createSheet failure right after the named insert. */
+      failCreateSheetAfter(step) {
+        createFaultAfter = step;
+      },
+      /** Arm a one-shot error thrown at the next receipt read (createSheet). */
+      failNextReceiptReadWith(error) {
+        receiptReadFaultArmed = true;
+        receiptReadFaultError = error;
       },
       state() {
         return state;

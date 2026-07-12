@@ -79,11 +79,24 @@ describe("createWriteQueue — activeSheets tracking & cleanup", () => {
 });
 
 describe("createWriteQueue + adapter — real monotonic revisions", () => {
-  it("assigns strictly increasing revisions 1..N for concurrent same-sheet writes", async () => {
+  it("assigns strictly increasing revisions for concurrent same-sheet writes", async () => {
     const t = await createTempDb();
     temps.push(t);
     const db = openDatabase(t.dbPath);
     try {
+      // Update-only persistState requires an existing sheet: create it first
+      // (revision 1), then the queued writes advance it to 2..N+1.
+      db.createSheet({
+        sheetId: "sheet-1",
+        creationToken: "seed-sheet-1",
+        canonicalUpdate: new Uint8Array([0]),
+        canonicalStateVector: new Uint8Array([0]),
+        title: "",
+        language: "plaintext",
+        schemaVersion: 0,
+        committedAt: 1,
+      });
+
       const q = createWriteQueue();
       const N = 12;
       const results = await Promise.all(
@@ -94,9 +107,9 @@ describe("createWriteQueue + adapter — real monotonic revisions", () => {
         ),
       );
       expect(results.map((r) => r.serverRevision)).toEqual(
-        Array.from({ length: N }, (_, i) => i + 1),
+        Array.from({ length: N }, (_, i) => i + 2),
       );
-      expect(db.getSheet("sheet-1").serverRevision).toBe(N);
+      expect(db.getSheet("sheet-1").serverRevision).toBe(N + 1);
       await tick();
       expect(q.activeSheets()).toBe(0);
     } finally {

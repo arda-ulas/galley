@@ -27,9 +27,17 @@ try {
   const db = openDatabase(dbPath);
 
   if (!noSignal) {
-    db.persistState(sheetId, {
-      state: new Uint8Array([1, 2, 3, 4]),
-      stateVector: new Uint8Array([9]),
+    // A durable create is a single WAL+FULL transaction — exactly what the
+    // recovery test needs to survive an abrupt SIGKILL at revision 1.
+    db.createSheet({
+      sheetId,
+      creationToken: `crash-${sheetId}`,
+      canonicalUpdate: new Uint8Array([1, 2, 3, 4]),
+      canonicalStateVector: new Uint8Array([9]),
+      title: "",
+      language: "plaintext",
+      schemaVersion: 0,
+      committedAt: 1,
     });
     // Signal readiness only after the commit has returned.
     process.stdout.write("committed\n");
