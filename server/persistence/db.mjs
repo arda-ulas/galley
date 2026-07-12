@@ -35,10 +35,10 @@ import { LATEST_VERSION, MIGRATIONS } from "./migrations.mjs";
 // constant is interpolated. It is a compile-time constant, never user input.
 const BUSY_TIMEOUT_MS = 5000;
 
-// Fixed production database path. In normal mode the path is NOT overridable
-// from untrusted input; only TEST_MODE honors an explicit test path.
-// NOTE for M3: reconcile this TEST_MODE seam with the server's existing
-// ECHO_REWIND_TEST flag when persistence is wired into server/index.mjs.
+// Fixed production database path. The server composition layer (server/app.mjs)
+// resolves the actual path — honoring an explicit test path only under the
+// server-level ECHO_REWIND_TEST flag — and passes it to openDatabase(). This
+// module no longer reads any environment variable.
 export const PRODUCTION_DB_PATH = "data/galley.db";
 
 // Singleton bookkeeping table: exactly one row (id = 1). The CHECKs make bad
@@ -72,18 +72,6 @@ export class TransactionRollbackError extends Error {
     // Standard `cause` (any value permitted) mirrors `original`.
     this.cause = original;
   }
-}
-
-/**
- * Resolve the database path. Test overrides are honored ONLY under TEST_MODE.
- * @param {NodeJS.ProcessEnv} [env]
- * @returns {string}
- */
-export function resolveDbPath(env = process.env) {
-  if (env.TEST_MODE === "1" && env.GALLEY_TEST_DB_PATH) {
-    return env.GALLEY_TEST_DB_PATH;
-  }
-  return PRODUCTION_DB_PATH;
 }
 
 /** Create the (controlled) parent directory of a DB path if needed. */
@@ -492,6 +480,20 @@ export function openDatabase(path, options = {}) {
       );
     }
 
+    // Enforce foreign-key constraints on every connection. `foreign_keys` is a
+    // per-connection pragma (default OFF in SQLite) and must be set outside any
+    // transaction — here, before migrations run. Later schema (metadata,
+    // idempotency) relies on ON DELETE CASCADE, so this must always be active.
+    db.exec("PRAGMA foreign_keys = ON;");
+    const foreignKeys = Number(
+      db.prepare("PRAGMA foreign_keys").get().foreign_keys,
+    );
+    if (foreignKeys !== 1) {
+      throw new Error(
+        `foreign_keys was not enabled (foreign_keys = ${foreignKeys})`,
+      );
+    }
+
     ensureSchemaVersionTable(db);
     validateSchemaVersionDefinition(db);
     const current = readAndValidateSchemaVersionRow(db);
@@ -528,6 +530,10 @@ export function openDatabase(path, options = {}) {
     get busyTimeout() {
       assertUsable();
       return Number(db.prepare("PRAGMA busy_timeout").get().timeout);
+    },
+    get foreignKeys() {
+      assertUsable();
+      return Number(db.prepare("PRAGMA foreign_keys").get().foreign_keys);
     },
     get schemaVersion() {
       assertUsable();

@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { writeFileSync, readFileSync } from "node:fs";
-import {
-  openDatabase,
-  PRODUCTION_DB_PATH,
-  resolveDbPath,
-  TransactionRollbackError,
-} from "./db.mjs";
+import { openDatabase, TransactionRollbackError } from "./db.mjs";
 import { LATEST_VERSION } from "./migrations.mjs";
 import { assertFileBacked, createTempDb } from "./tmpDb.mjs";
 
@@ -29,6 +24,7 @@ describe("openDatabase — initialization & durability enforcement", () => {
       expect(db.journalMode).toBe("wal");
       expect(db.synchronous).toBe(2);
       expect(db.busyTimeout).toBe(5000);
+      expect(db.foreignKeys).toBe(1);
       expect(db.schemaVersion).toBe(LATEST_VERSION);
       expect(db.integrityCheck()).toBe("ok");
       expect(t.exists(t.dbPath)).toBe(true);
@@ -119,20 +115,6 @@ describe("openDatabase — initialization & durability enforcement", () => {
     } finally {
       b.close();
     }
-  });
-});
-
-describe("resolveDbPath — TEST_MODE gating", () => {
-  it("returns the fixed production path in normal mode, ignoring overrides", () => {
-    expect(resolveDbPath({})).toBe(PRODUCTION_DB_PATH);
-    expect(resolveDbPath({ GALLEY_TEST_DB_PATH: "/tmp/x.db" })).toBe(
-      PRODUCTION_DB_PATH,
-    );
-  });
-  it("honors the explicit test path only under TEST_MODE", () => {
-    expect(
-      resolveDbPath({ TEST_MODE: "1", GALLEY_TEST_DB_PATH: "/tmp/x.db" }),
-    ).toBe("/tmp/x.db");
   });
 });
 
