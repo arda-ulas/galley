@@ -10,12 +10,17 @@
 //   openDatabase(); normal mode ignores it and uses the fixed production path.
 // - The persistence layer no longer reads any environment variable.
 //
-// The dormant WebSocket room behavior (single-doc-per-path collaboration,
-// awareness relay) lives here. A newly created room starts EMPTY — there is no
-// server-side starter seeding; a room only holds content once durable room
-// loading is wired or clients write to it. The test-only /__test/reset route
-// currently clears only live in-memory rooms (destroying each Awareness/Y.Doc)
-// and does not clear durable DB state; it never recreates any content.
+// Collaboration WebSocket routing is canonical and strict: connections are
+// accepted ONLY at `/ws/:sheetId` (exact single segment, no query string, no
+// trailing slash, no extra segments, no aliases, no legacy `/r/demo`). On a
+// first join the sheet id is validated and the room is hydrated from durable
+// state through the shared loadValidatedSheet() boundary; a fresh Y.Doc is
+// seeded ONLY with the validated canonical durable update (never starter code,
+// never title/language). A room enters the `rooms` map only after it is fully
+// initialized, and any invalid / missing / corrupt / operational failure closes
+// the socket with a terminal code (4400 / 4404 / 4500 / 1011) BEFORE any room is
+// created. Live WebSocket updates are relayed between peers but are NOT persisted
+// yet (no live-durability claim).
 
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
@@ -30,6 +35,7 @@ import { createRateLimiter } from "./rateLimiter.mjs";
 import { generateSheetId } from "./sheetId.mjs";
 import { handleCreateSheet } from "./sheets.mjs";
 import { handleBootstrapSheet } from "./bootstrap.mjs";
+import { loadValidatedSheet } from "./loadValidatedSheet.mjs";
 import { respondInternalError } from "./errors.mjs";
 import {
   RATE_LIMIT_IP_MAX,
@@ -39,6 +45,24 @@ import {
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+
+// Canonical collaboration route: exactly `/ws/<sheetId>` — one path segment, no
+// query string, no trailing slash, no extra segments, no aliases. The captured
+// segment is authoritatively validated by loadValidatedSheet (malformed → 4400),
+// so no arbitrary room name is ever derived from a request path.
+const WS_ROUTE = /^\/ws\/([^/?#]+)$/;
+
+// Terminal WebSocket close codes for the hydration boundary. 4400/4404/4500 are
+// application (private-use) codes; 1011 is the standard internal-error code and
+// marks a retryable operational failure. Reasons are short and generic — no
+// SQLite/Yjs internals ever leak. Client reconnect policy for terminal codes is
+// a later provider commit.
+const WS_CLOSE = Object.freeze({
+  INVALID: 4400, // malformed identifier or route
+  NOT_FOUND: 4404, // no such sheet
+  CORRUPT: 4500, // corrupt / incompatible durable state
+  INTERNAL: 1011, // operational DB / internal initialization failure
+});
 
 /**
  * Resolve server configuration from an environment object.
@@ -101,58 +125,183 @@ export async function createServerApplication(env = process.env, options = {}) {
   // every doc/awareness handle.
   /** @type {Map<string, { doc: Y.Doc, awareness: awarenessProtocol.Awareness, clients: Map<import('ws').WebSocket, Set<number>> }>} */
   const rooms = new Map();
+  // Test-observable count of SUCCESSFUL durable room hydrations: incremented
+  // only after a room is fully constructed AND inserted into `rooms` — never on
+  // a load attempt, a load failure, or a failed/partial construction. Proves
+  // concurrent first joins hydrate exactly once.
+  let hydrationCount = 0;
+  // Test-only one-shot construction fault: when armed, buildRoom() invokes the
+  // observer with its partial { doc, awareness } and then throws, to exercise
+  // partial-construction cleanup. Auto-clears after firing; never armed in
+  // production (reachable only through the app __test seam).
+  /** @type {null | ((partial: { doc: Y.Doc, awareness: awarenessProtocol.Awareness }) => void)} */
+  let roomBuildFault = null;
 
+  /**
+   * Construct a fully-wired but UNREGISTERED room: a fresh Y.Doc (optionally
+   * seeded with an already-validated durable update), a server-owned Awareness,
+   * an empty client map, and the sync/awareness relay listeners. It performs NO
+   * map insertion and NO validation — callers own both.
+   *
+   * The ENTIRE construction sequence runs under one try/catch. If any step fails
+   * (doc creation, apply, awareness creation, listener wiring), the partial
+   * resources are torn down — Awareness first, then Y.Doc — before the original
+   * error is re-thrown: nothing leaks, and no cleanup error masks or escapes past
+   * the original failure. Callers therefore never receive a partly-built room.
+   * @param {Uint8Array | null} initialUpdate validated canonical durable update
+   */
+  function buildRoom(initialUpdate) {
+    let doc;
+    let awareness;
+    try {
+      doc = new Y.Doc();
+      // Predeclare the plain-text content root (matches the create-path type
+      // contract) before applying any durable update.
+      doc.getText("content");
+      if (initialUpdate) Y.applyUpdate(doc, initialUpdate);
+
+      awareness = new awarenessProtocol.Awareness(doc);
+      awareness.setLocalState(null); // server has no presence of its own
+
+      // Test-only one-shot: fail here (both Y.Doc and Awareness now exist, before
+      // the room is returned) to prove partial-construction cleanup destroys both.
+      if (roomBuildFault) {
+        const fault = roomBuildFault;
+        roomBuildFault = null; // one-shot: auto-clear before it can re-arm
+        fault({ doc, awareness });
+        throw new Error("injected room construction failure");
+      }
+
+      /** @type {Map<import('ws').WebSocket, Set<number>>} */
+      const clients = new Map();
+
+      doc.on("update", (update, origin) => {
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MSG_SYNC);
+        syncProtocol.writeUpdate(enc, update);
+        const msg = encoding.toUint8Array(enc);
+        clients.forEach((_, client) => {
+          if (client !== origin && client.readyState === 1 /* OPEN */) {
+            client.send(msg);
+          }
+        });
+      });
+
+      // Track which awareness clientIds each WebSocket connection owns so we can
+      // clean them up on disconnect (prevents stale states poisoning awareness).
+      awareness.on("update", ({ added, updated, removed }, origin) => {
+        if (origin !== null && clients.has(origin)) {
+          const ids = clients.get(origin);
+          for (const id of added) ids.add(id);
+          for (const id of updated) ids.add(id);
+          for (const id of removed) ids.delete(id);
+        }
+
+        const changed = [...added, ...updated, ...removed];
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MSG_AWARENESS);
+        encoding.writeVarUint8Array(
+          enc,
+          awarenessProtocol.encodeAwarenessUpdate(awareness, changed),
+        );
+        const msg = encoding.toUint8Array(enc);
+        clients.forEach((_, client) => {
+          if (client.readyState === 1 /* OPEN */) client.send(msg);
+        });
+      });
+
+      return { doc, awareness, clients };
+    } catch (err) {
+      // Partial-construction cleanup: tear down in reverse order (Awareness
+      // before Y.Doc), attempting BOTH even if one throws, and never masking or
+      // replacing the original error. No cleanup error is allowed to escape.
+      if (awareness) {
+        try {
+          awareness.destroy();
+        } catch (cleanupErr) {
+          console.error("buildRoom cleanup: awareness.destroy failed:", cleanupErr);
+        }
+      }
+      if (doc) {
+        try {
+          doc.destroy();
+        } catch (cleanupErr) {
+          console.error("buildRoom cleanup: doc.destroy failed:", cleanupErr);
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Test seam ONLY: get-or-create an EMPTY room by arbitrary name. Never used by
+   * the collaboration WebSocket path (which hydrates through
+   * acquireHydratedRoom); retained so lifecycle/disposal tests can exercise room
+   * teardown deterministically.
+   */
   function getRoom(name) {
     const existing = rooms.get(name);
     if (existing) return existing;
-
-    // A fresh room starts empty — no server-side starter seeding. Content
-    // arrives from durable state once durable room loading is wired, or from
-    // connected clients' own edits.
-    const doc = new Y.Doc();
-
-    const awareness = new awarenessProtocol.Awareness(doc);
-    awareness.setLocalState(null); // server has no presence of its own
-    /** @type {Map<import('ws').WebSocket, Set<number>>} */
-    const clients = new Map();
-
-    doc.on("update", (update, origin) => {
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MSG_SYNC);
-      syncProtocol.writeUpdate(enc, update);
-      const msg = encoding.toUint8Array(enc);
-      clients.forEach((_, client) => {
-        if (client !== origin && client.readyState === 1 /* OPEN */) {
-          client.send(msg);
-        }
-      });
-    });
-
-    // Track which awareness clientIds each WebSocket connection owns so we can
-    // clean them up on disconnect (prevents stale states poisoning awareness).
-    awareness.on("update", ({ added, updated, removed }, origin) => {
-      if (origin !== null && clients.has(origin)) {
-        const ids = clients.get(origin);
-        for (const id of added) ids.add(id);
-        for (const id of updated) ids.add(id);
-        for (const id of removed) ids.delete(id);
-      }
-
-      const changed = [...added, ...updated, ...removed];
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MSG_AWARENESS);
-      encoding.writeVarUint8Array(
-        enc,
-        awarenessProtocol.encodeAwarenessUpdate(awareness, changed),
-      );
-      const msg = encoding.toUint8Array(enc);
-      clients.forEach((_, client) => {
-        if (client.readyState === 1 /* OPEN */) client.send(msg);
-      });
-    });
-
-    const room = { doc, awareness, clients };
+    const room = buildRoom(null);
     rooms.set(name, room);
+    return room;
+  }
+
+  /**
+   * Production first-join path for a canonical sheet id. Fully SYNCHRONOUS from
+   * the map lookup to the map insertion — there is NO await between rooms.get and
+   * rooms.set, so two concurrent first joins can never both initialize a room.
+   * On any validation/operational failure it closes the socket with the mapped
+   * terminal code and returns null WITHOUT creating a room or leaking a Y.Doc /
+   * Awareness. Returns the shared hydrated room on success.
+   * @param {string} sheetId single path segment captured from `/ws/:sheetId`
+   * @param {import('ws').WebSocket} ws
+   * @returns {{ doc: Y.Doc, awareness: awarenessProtocol.Awareness, clients: Map<import('ws').WebSocket, Set<number>> } | null}
+   */
+  function acquireHydratedRoom(sheetId, ws) {
+    const existing = rooms.get(sheetId);
+    if (existing) return existing;
+
+    // The shared validated-load boundary is the single security authority for
+    // persisted state — bootstrap is not trusted, and validation is not
+    // reimplemented here.
+    const loaded = loadValidatedSheet({ db, sheetId });
+    if (!loaded.ok) {
+      switch (loaded.reason) {
+        case "invalid_id":
+          ws.close(WS_CLOSE.INVALID, "invalid");
+          break;
+        case "missing":
+          ws.close(WS_CLOSE.NOT_FOUND, "not found");
+          break;
+        case "corrupt":
+          ws.close(WS_CLOSE.CORRUPT, "unavailable");
+          break;
+        case "db_error":
+        default:
+          // Operational failure — generic, retryable. Log server-side only.
+          console.error(`ws hydration ${sheetId}: ${loaded.reason}`, loaded.detail);
+          ws.close(WS_CLOSE.INTERNAL, "internal error");
+          break;
+      }
+      return null;
+    }
+
+    let room;
+    try {
+      // Hydrate ONLY from the validated canonical durable update — never starter
+      // content, never title/language, and durable state is not mutated.
+      room = buildRoom(loaded.canonicalUpdate);
+    } catch (err) {
+      // Validated canonical bytes should always re-apply; guard defensively so a
+      // build failure leaks nothing and reports a retryable internal error.
+      console.error(`ws hydration build ${sheetId}:`, err);
+      ws.close(WS_CLOSE.INTERNAL, "internal error");
+      return null;
+    }
+
+    hydrationCount++;
+    rooms.set(sheetId, room);
     return room;
   }
 
@@ -238,9 +387,20 @@ export async function createServerApplication(env = process.env, options = {}) {
   const wss = new WebSocketServer({ server: httpServer });
 
   wss.on("connection", (ws, req) => {
-    const rawPath = req.url ?? "/demo";
-    const roomName = rawPath.split("?")[0].replace(/^\//, "") || "demo";
-    const { doc, awareness, clients } = getRoom(roomName);
+    // Strict canonical route: only `/ws/<sheetId>` is accepted. Anything else
+    // (aliases, legacy `/r/demo`, query strings, trailing slashes, extra
+    // segments) is a terminal 4400 before any room is created.
+    const match = WS_ROUTE.exec(req.url ?? "");
+    if (!match) {
+      ws.close(WS_CLOSE.INVALID, "invalid");
+      return;
+    }
+
+    // Synchronous validate + hydrate. On failure the socket is already closed
+    // with a terminal code and no room exists; do not start the sync flow.
+    const room = acquireHydratedRoom(match[1], ws);
+    if (!room) return;
+    const { doc, awareness, clients } = room;
 
     clients.set(ws, new Set());
 
@@ -525,6 +685,23 @@ export async function createServerApplication(env = process.env, options = {}) {
     rooms,
     getRoom,
     disposeAllRooms,
+    __test: {
+      /**
+       * Arm a one-shot buildRoom() failure that fires after Awareness has been
+       * created (both Y.Doc and Awareness exist) but before the room is returned.
+       * The optional observer receives the partial { doc, awareness } so a test
+       * can watch their destruction; the seam then throws so acquireHydratedRoom
+       * maps it to a generic 1011 close and both partials are destroyed. Consumed
+       * after firing once.
+       * @param {(partial: { doc: Y.Doc, awareness: awarenessProtocol.Awareness }) => void} [observe]
+       */
+      failNextRoomBuild(observe) {
+        roomBuildFault = observe ?? (() => {});
+      },
+    },
+    get hydrationCount() {
+      return hydrationCount;
+    },
     get state() {
       return state;
     },

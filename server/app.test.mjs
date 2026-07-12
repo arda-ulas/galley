@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createServer as createNetServer } from "node:net";
+import * as Y from "yjs";
 import { createServerApplication, resolveConfig } from "./app.mjs";
 import { PRODUCTION_DB_PATH } from "./persistence/db.mjs";
 import { createTempDb } from "./persistence/tmpDb.mjs";
@@ -91,6 +92,28 @@ afterEach(async () => {
     throw new AggregateError(failures, "teardown found problems");
   }
 });
+
+/** Create one durable sheet directly through the persistence boundary so a
+ * client can connect to its canonical `/ws/:sheetId` route. */
+let wsTokenCounter = 0;
+function createDurableSheet(app, sheetId, text = "live") {
+  const doc = new Y.Doc();
+  doc.getText("content").insert(0, text);
+  const canonicalUpdate = Y.encodeStateAsUpdate(doc);
+  const canonicalStateVector = Y.encodeStateVector(doc);
+  doc.destroy();
+  app.db.createSheet({
+    sheetId,
+    creationToken: `ws-tok-${wsTokenCounter++}`,
+    canonicalUpdate,
+    canonicalStateVector,
+    title: "t",
+    language: "typescript",
+    schemaVersion: 0,
+    committedAt: 1,
+  });
+  return sheetId;
+}
 
 /** Build a test application bound to an ephemeral port and a temp database. */
 function makeApp(t, extraEnv = {}, options = {}) {
@@ -417,8 +440,9 @@ describe("createServerApplication — room disposal", () => {
     const app = track(await makeApp(t));
     await app.start();
     const port = app.address().port;
+    const sheetId = createDurableSheet(app, "sheetLIVE0000001");
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/demo`);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/${sheetId}`);
     await new Promise((resolve, reject) => {
       ws.once("open", resolve);
       ws.once("error", reject);
