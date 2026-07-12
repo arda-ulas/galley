@@ -10,11 +10,12 @@
 //   openDatabase(); normal mode ignores it and uses the fixed production path.
 // - The persistence layer no longer reads any environment variable.
 //
-// M3 commit-1 scope: this is a behavior-preserving extraction. The dormant
-// WebSocket room behavior (single-doc-per-path collaboration, awareness relay)
-// is moved here verbatim. STARTER_CODE seeding and the legacy in-memory-only
-// /__test/reset route are preserved and removed later (commit 4). POST
-// /api/sheets returns a temporary 501 until the create API lands (commit 3).
+// The dormant WebSocket room behavior (single-doc-per-path collaboration,
+// awareness relay) lives here. A newly created room starts EMPTY — there is no
+// server-side starter seeding; a room only holds content once durable room
+// loading is wired or clients write to it. The test-only /__test/reset route
+// currently clears only live in-memory rooms (destroying each Awareness/Y.Doc)
+// and does not clear durable DB state; it never recreates any content.
 
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
@@ -37,56 +38,6 @@ import {
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
-
-// Starter code seeded into every fresh room at creation time.
-// Keeping this server-side makes seeding the server's sole responsibility —
-// Node.js is single-threaded, so getRoom() is atomic: two concurrent WebSocket
-// connections cannot both observe an absent room and both insert the seed.
-// src/lib/editorSeed.ts is the canonical source; this must stay in sync with it.
-const STARTER_CODE = `import { WebsocketProvider } from "y-websocket";
-import * as Y from "yjs";
-
-type Snapshot = {
-  id: string;
-  text: string;
-  createdAt: number;
-};
-
-type SessionUser = {
-  id: string;
-  name: string;
-  color: string;
-  cursor: number | null;
-};
-
-const doc = new Y.Doc();
-const content = doc.getText("content");
-const snapshots = doc.getArray<Snapshot>("snapshots");
-
-export function createRoom(roomId: string): WebsocketProvider {
-  return new WebsocketProvider("ws://localhost:1234", roomId, doc);
-}
-
-export function captureSnapshot(): void {
-  const text = content.toString();
-  if (!text.trim()) return;
-
-  snapshots.push([{
-    id: crypto.randomUUID(),
-    text,
-    createdAt: Date.now(),
-  }]);
-}
-
-export function getActiveUsers(
-  awareness: Map<number, SessionUser>,
-): SessionUser[] {
-  return Array.from(awareness.values()).filter((u) => u.cursor !== null);
-}
-
-export function getSnapshots(): Snapshot[] {
-  return snapshots.toArray();
-}`;
 
 /**
  * Resolve server configuration from an environment object.
@@ -154,10 +105,10 @@ export async function createServerApplication(env = process.env, options = {}) {
     const existing = rooms.get(name);
     if (existing) return existing;
 
+    // A fresh room starts empty — no server-side starter seeding. Content
+    // arrives from durable state once durable room loading is wired, or from
+    // connected clients' own edits.
     const doc = new Y.Doc();
-    // Seed exactly once per room lifetime. Single-threaded Node.js guarantees
-    // this block runs atomically — no duplicate insert is possible.
-    doc.getText("content").insert(0, STARTER_CODE);
 
     const awareness = new awarenessProtocol.Awareness(doc);
     awareness.setLocalState(null); // server has no presence of its own

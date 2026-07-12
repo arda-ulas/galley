@@ -338,6 +338,31 @@ describe("createServerApplication — cleanup failure and retry", () => {
 });
 
 describe("createServerApplication — room disposal", () => {
+  it("creates a fresh room with empty content (no starter seeding)", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    const room = app.getRoom("fresh");
+    expect(room.doc.getText("content").toString()).toBe("");
+  });
+
+  it("reset does not recreate starter content — a rebuilt room is still empty", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    app.getRoom("demo"); // create a live in-memory room
+
+    const res = await fetch(
+      `http://127.0.0.1:${app.address().port}/__test/reset`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    expect(app.rooms.size).toBe(0); // live room state cleared
+
+    // A room recreated after reset carries no starter content.
+    const rebuilt = app.getRoom("demo");
+    expect(rebuilt.doc.getText("content").toString()).toBe("");
+  });
+
   it("destroys room Awareness and Y.Doc on reset (not just clears the map)", async () => {
     const t = await tmp();
     const app = track(await makeApp(t));
