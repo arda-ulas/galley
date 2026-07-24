@@ -46,3 +46,15 @@ export const MAX_WS_SYNC_UPDATE_BYTES = MAX_CANONICAL_STATE_BYTES; // 512 KiB
 // intended presence payload (name + color + cursor anchor/head) is well under
 // 1 KiB; 16 KiB gives generous headroom while staying strictly bounded.
 export const MAX_WS_AWARENESS_BYTES = 16 * 1024; // 16 KiB
+
+// Transport-level defense-in-depth cap (M4). Enforced by the `ws` receiver on
+// the fully REASSEMBLED message (across continuation frames), BEFORE our own
+// per-message boundary runs: a message over this cap is rejected at the
+// transport layer with a RangeError ('Max payload size exceeded',
+// code WS_ERR_UNSUPPORTED_MESSAGE_LENGTH, close code 1009) and never reaches the
+// decoder. It sits STRICTLY ABOVE the authoritative application boundary
+// (MAX_WS_FRAME_BYTES → 4409): set to 2× so the tested application containment
+// stays the operative limit for anything a real client could plausibly send,
+// while a grossly oversized message is still capped before any decoder
+// allocation. Replaces the `ws` default of 100 MiB.
+export const MAX_WS_TRANSPORT_PAYLOAD_BYTES = 2 * MAX_WS_FRAME_BYTES; // 2 MiB

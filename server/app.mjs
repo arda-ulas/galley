@@ -51,6 +51,7 @@ import {
   MAX_WS_AWARENESS_BYTES,
   MAX_WS_FRAME_BYTES,
   MAX_WS_SYNC_UPDATE_BYTES,
+  MAX_WS_TRANSPORT_PAYLOAD_BYTES,
   RATE_LIMIT_IP_MAX,
   RATE_LIMIT_TOKEN_MAX,
   RATE_LIMIT_WINDOW_MS,
@@ -539,9 +540,29 @@ export async function createServerApplication(env = process.env, options = {}) {
     res.end();
   });
 
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    // Transport-level defense-in-depth: the `ws` receiver rejects any reassembled
+    // message larger than this at the protocol layer (close 1009) BEFORE our
+    // per-message boundary runs, replacing the `ws` default of 100 MiB. The
+    // authoritative, tested application boundary remains MAX_WS_FRAME_BYTES
+    // (→ 4409); this cap sits strictly above it (2×). See limits.mjs.
+    maxPayload: MAX_WS_TRANSPORT_PAYLOAD_BYTES,
+  });
 
   wss.on("connection", (ws, req) => {
+    // Contain per-socket transport errors so they can NEVER reach the socket's
+    // EventEmitter as an unhandled 'error' (which would crash the process). The
+    // expected case is an inbound message exceeding maxPayload
+    // (WS_ERR_UNSUPPORTED_MESSAGE_LENGTH): `ws` is already closing this socket
+    // with 1009, so it is contained quietly. Anything unexpected is still logged
+    // for observability — this listener contains known transport limits, it does
+    // not hide unknown faults.
+    ws.on("error", (err) => {
+      if (err && err.code === "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH") return;
+      console.error("ws socket error:", err);
+    });
+
     // Strict canonical route: only `/ws/<sheetId>` is accepted. Anything else
     // (aliases, legacy `/r/demo`, query strings, trailing slashes, extra
     // segments) is a terminal 4400 before any room is created.

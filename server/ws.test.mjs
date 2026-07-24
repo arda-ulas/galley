@@ -20,6 +20,7 @@ import {
   MAX_WS_AWARENESS_BYTES,
   MAX_WS_FRAME_BYTES,
   MAX_WS_SYNC_UPDATE_BYTES,
+  MAX_WS_TRANSPORT_PAYLOAD_BYTES,
 } from "./limits.mjs";
 
 const MSG_SYNC = 0;
@@ -699,6 +700,45 @@ describe("ws message boundary — oversized input (contained, 4409)", () => {
 
     expect(room.awareness.getStates().size).toBe(0);
     expect(healthy.ws.readyState).toBe(WebSocket.OPEN);
+  });
+});
+
+describe("ws transport boundary — maxPayload (contained, 1009)", () => {
+  it("contains a peer whose message exceeds the transport cap; server, room, and healthy peer survive", async () => {
+    const { app, port } = await startApp();
+    createDurableSheet(app, { text: SEED });
+    // One byte over the transport cap (2× the application frame cap). The `ws`
+    // receiver rejects this on the reassembled message at the transport layer
+    // (close 1009) BEFORE our per-message 4409 boundary runs. expectContained
+    // proves the offender is closed with 1009, the healthy peer stays OPEN, the
+    // room's live doc is unchanged, and the process is still alive (a later
+    // client joins and syncs). The per-socket 'error' listener keeps the
+    // oversized-message error from crashing the process.
+    await expectContained(
+      app,
+      port,
+      VALID_ID,
+      (ws) => ws.send(new Uint8Array(MAX_WS_TRANSPORT_PAYLOAD_BYTES + 1)),
+      1009,
+    );
+  });
+
+  it("keeps the application 4409 boundary authoritative below the transport cap", async () => {
+    const { app, port } = await startApp();
+    createDurableSheet(app, { text: SEED });
+    // A frame over the application cap but under the transport cap passes the
+    // transport layer and is contained by our per-message boundary as 4409 —
+    // proving the two tiers are distinct and the application boundary remains
+    // the operative limit for anything below the transport backstop.
+    const overAppUnderTransport = MAX_WS_FRAME_BYTES + 1;
+    expect(overAppUnderTransport).toBeLessThan(MAX_WS_TRANSPORT_PAYLOAD_BYTES);
+    await expectContained(
+      app,
+      port,
+      VALID_ID,
+      (ws) => ws.send(new Uint8Array(overAppUnderTransport)),
+      4409,
+    );
   });
 });
 
