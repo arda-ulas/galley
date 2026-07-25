@@ -3,6 +3,7 @@ import * as decoding from "lib0/decoding";
 import type { DraftSession } from "./draftSession";
 import type { LanguageId } from "./languages";
 import { decodeStandardBase64, encodeStandardBase64 } from "./base64";
+import { isValidSheetId } from "./sheetId";
 import { createSheetPath } from "./topology";
 import {
   createSheetProvider,
@@ -110,9 +111,6 @@ import {
 
 /** Server contract: schemaVersion must be exactly 0 in v1 (see server/limits.mjs). */
 const CREATE_SCHEMA_VERSION = 0;
-
-/** Sheet-id shape mirror — full route-level id parsing/validation is S5. */
-const SHEET_ID_RE = /^[A-Za-z0-9_-]{16}$/;
 
 /** The immutable durable-create receipt S5 routing may consume. */
 export type ShareReceipt = {
@@ -415,7 +413,7 @@ function parseReceipt(json: unknown): ShareReceipt {
   }
   const r = json as Record<string, unknown>;
 
-  if (typeof r.sheetId !== "string" || !SHEET_ID_RE.test(r.sheetId)) {
+  if (!isValidSheetId(r.sheetId)) {
     throw receiptError("Create receipt has an invalid sheetId.");
   }
   if (!isRevision(r.serverRevision)) {
