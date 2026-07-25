@@ -1,18 +1,21 @@
 import { DraftPage } from "./pages/DraftPage";
 import { UnavailableLink } from "./components/UnavailableLink";
+import { parseRoute } from "./lib/route";
 
 /**
- * M1 route resolution. Only the root path is a local draft. There is no
- * shared-sheet route yet (Share is M3/M4), so every non-root path renders a
- * neutral unavailable state — no draft editor, no server contact, no
- * expired-vs-invalid cause claim, and no silent redirect to `/`. The dormant
- * prototype provider/presence/shell source remains in the tree, unimported, for
- * later milestones (M4/M5/M7); the prototype timeline architecture was removed
- * in M1c.
+ * M4 S5 route resolution. The pathname is resolved through the typed route model
+ * (`parseRoute`): the root path is the local draft; every other path renders the
+ * neutral unavailable surface. A well-formed `/{sheetId}` is RECOGNIZED as a
+ * sheet route but stays DORMANT in this build — it renders the same neutral
+ * surface, makes no server contact, and asserts no existence or connection
+ * state. S6 activates shared routes (join, provider attach, live view); the
+ * prototype provider/presence source remains unimported for those milestones.
  */
 export function App() {
-  if (window.location.pathname === "/") {
+  const route = parseRoute(window.location.pathname);
+  if (route.kind === "draft") {
     return <DraftPage />;
   }
+  // `sheet` (dormant until S6) and `unavailable` share the neutral surface.
   return <UnavailableLink />;
 }

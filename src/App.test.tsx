@@ -56,3 +56,22 @@ describe("App — non-root paths do not render a draft", () => {
     },
   );
 });
+
+describe("App — a well-formed sheet route is dormant in S5", () => {
+  it("renders the neutral unavailable surface, not the editor or any state claim", () => {
+    // A valid-SHAPE id (16 base64url chars). S5 recognizes it as a sheet route
+    // but does not activate it: no server contact, no editor, no connection
+    // wording. S6 activates shared routes.
+    window.history.replaceState({}, "", "/abcdefghij123456");
+    render(<App />);
+    expect(screen.getByText("This link is unavailable")).toBeInTheDocument();
+    // No draft chrome or editor.
+    expect(screen.queryByText("Local draft — not uploaded")).toBeNull();
+    expect(screen.queryByLabelText("Sheet title")).toBeNull();
+    expect(screen.queryByLabelText("Code editor")).toBeNull();
+    // No connection-state claim of any kind.
+    expect(screen.queryByText(/\bLive\b|Connecting|Shared|Saving|Saved/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy .*link/i })).toBeNull();
+  });
+});
