@@ -488,9 +488,219 @@ export async function createServerApplication(env = process.env, options = {}) {
     rooms.clear();
   }
 
+  // Test-only deterministic create BARRIER (test mode only). When ARMED, the next
+  // create request is held AFTER it has reached the server and BEFORE the client
+  // receives the durable success response, so a test can prove edits made while
+  // Share is in flight survive the handoff — WITHOUT any arbitrary sleep and
+  // WITHOUT the client racing ahead of the server.
+  //
+  // Each `arm` mints a FRESH generation identified by a unique `holdId`; every
+  // control (reached / release) is scoped to that id, so a completed, released, or
+  // cancelled generation can never acknowledge or block a LATER one (no single
+  // global boolean). The barrier exposes three observable moments:
+  //   1. armed          — `POST /__test/hold-create` → `{ holdId }`
+  //   2. server-REACHED — a create for THAT holdId has entered and parked; a test
+  //                       waits for it via `GET /__test/hold-create/reached?holdId=…`
+  //                       (→ `{ reached:true }`) before typing-during-Share/releasing.
+  //   3. released       — `POST /__test/release-create?holdId=…` frees the request.
+  // A release/reset BEFORE entry resolves reached-waiters with an explicit
+  // `{ reached:false, cancelled:true }`; a stale/unknown holdId is inert. A hold is
+  // cleared BY IDENTITY once its held create finishes, so the next arm is clean.
+  // `settleCreateHold()` (reset/shutdown) releases/cancels the current hold AND
+  // awaits its in-flight create's completion, so the DB is never cleared out from
+  // under a resumed held create and shutdown never hangs. Production never
+  // constructs the barrier.
+  /**
+   * @typedef {{
+   *   id: string,
+   *   entered: boolean,
+   *   settled: boolean,
+   *   reachedWaiters: Array<(r: { reached: boolean, cancelled: boolean }) => void>,
+   *   gate: Promise<void>, openGate: () => void,
+   *   active: Promise<void>, finishActive: () => void,
+   * }} CreateHold
+   */
+  /** @type {CreateHold | null} The single CURRENT generation (or none). */
+  let createHold = null;
+  let nextHoldId = 1;
+
+  /** Resolve and clear a generation's reached-waiters with a fixed result. */
+  function wakeReachedWaiters(h, result) {
+    for (const w of h.reachedWaiters.splice(0)) w(result);
+  }
+
+  /**
+   * Arm a generation. Three cases:
+   * - no current hold → mint and return a fresh `{ holdId }`;
+   * - a current hold that has NOT entered → supersede (cancel + unblock) it and
+   *   mint a fresh generation, so a released/reset/stale-but-unentered hold can
+   *   never block a new arm;
+   * - a current hold that HAS entered and whose create is still active → CONFLICT
+   *   (`{ conflict: true }`): the existing hold is left completely untouched (its
+   *   gate stays closed, its reached-waiters intact, its `holdId` still valid for
+   *   reached/release/reset/shutdown) and NO new generation is created. The caller
+   *   maps this to HTTP 409.
+   * @returns {{ holdId: string } | { conflict: true }}
+   */
+  function armCreateHold() {
+    const prev = createHold;
+    if (prev && prev.entered && !prev.settled) {
+      return { conflict: true }; // a live held create occupies the barrier
+    }
+    if (prev) cancelHold(prev); // not entered → safe to supersede
+    const id = String(nextHoldId++);
+    let openGate;
+    const gate = new Promise((r) => {
+      openGate = r;
+    });
+    let finishActive;
+    const active = new Promise((r) => {
+      finishActive = r;
+    });
+    createHold = { id, entered: false, settled: false, reachedWaiters: [], gate, openGate, active, finishActive };
+    return { holdId: id };
+  }
+
+  /** Cancel a generation: wake its waiters as not-reached/cancelled, finish its
+   *  (never-entered) active promise, and open its gate. Idempotent per generation. */
+  function cancelHold(h) {
+    if (h.settled) return;
+    h.settled = true;
+    wakeReachedWaiters(h, { reached: false, cancelled: true });
+    if (!h.entered) h.finishActive();
+    h.openGate();
+    if (createHold === h) createHold = null;
+  }
+
+  /**
+   * Called by the create dispatch. Enters the CURRENT generation (marking reached
+   * and waking reached-waiters), or returns `null` when no live generation is
+   * armed / one is already occupied. `finish()` clears ONLY the matching active
+   * generation by identity, so a completed hold never blocks a later arm.
+   */
+  function enterCreateHold() {
+    const h = createHold;
+    if (!h || h.entered || h.settled) return null;
+    h.entered = true;
+    wakeReachedWaiters(h, { reached: true, cancelled: false });
+    return {
+      gate: h.gate,
+      finish: () => {
+        h.finishActive();
+        h.settled = true;
+        if (createHold === h) createHold = null; // clear by identity
+      },
+    };
+  }
+
+  /**
+   * Resolve once a create for EXACTLY `holdId` has reached the barrier, or with
+   * `{ reached:false, cancelled:true }` if that generation is stale/unknown or was
+   * released/reset before entry. A stale id never acknowledges the current one.
+   * @param {string | null} holdId
+   * @returns {Promise<{ reached: boolean, cancelled: boolean }>}
+   */
+  function awaitCreateReached(holdId) {
+    const h = createHold;
+    if (!h || h.id !== holdId || h.settled) {
+      return Promise.resolve({ reached: false, cancelled: true });
+    }
+    if (h.entered) return Promise.resolve({ reached: true, cancelled: false });
+    return new Promise((resolve) => h.reachedWaiters.push(resolve));
+  }
+
+  /**
+   * Release the generation `holdId`. A stale/unknown id is inert (returns false).
+   * Releasing BEFORE entry resolves reached-waiters cancelled and clears the hold;
+   * releasing after entry opens the gate so the parked create finishes (its
+   * `finish()` then clears the hold by identity).
+   * @param {string | null} holdId
+   * @returns {boolean} whether the current generation was released
+   */
+  function releaseCreateHold(holdId) {
+    const h = createHold;
+    if (!h || h.id !== holdId || h.settled) return false;
+    if (!h.entered) {
+      cancelHold(h); // release before entry ⇒ nothing was ever parked
+      return true;
+    }
+    h.openGate(); // parked create resumes; its finish() clears the hold by identity
+    return true;
+  }
+
+  /**
+   * Deadlock/race guard for reset and shutdown: release/cancel the current
+   * generation and AWAIT its in-flight create's completion before returning — so a
+   * resumed held create finishes (or was never entered) BEFORE the durable DB is
+   * cleared or closed, leaving no hanging waiters. Safe when no hold is armed.
+   * @returns {Promise<void>}
+   */
+  function settleCreateHold() {
+    const h = createHold;
+    createHold = null; // future creates are un-held
+    if (!h || h.settled) return Promise.resolve();
+    // Wake reached-waiters and open the gate WITHOUT marking settled yet, so a
+    // parked create can resume; its `active` resolves when it fully completes.
+    wakeReachedWaiters(h, { reached: false, cancelled: true });
+    if (!h.entered) h.finishActive();
+    h.openGate();
+    h.settled = true;
+    return h.active; // resolves when the held create (if any) has fully completed
+  }
+
+  /** Pathname of a barrier control URL (query stripped) for exact-route matching. */
+  function barrierPath(url) {
+    return new URL(url ?? "", "http://localhost").pathname;
+  }
+  /** The `holdId` query parameter of a barrier control URL (or null). */
+  function barrierHoldId(url) {
+    return new URL(url ?? "", "http://localhost").searchParams.get("holdId");
+  }
+
   // Single HTTP server handles WebSocket upgrades and the test-only reset
   // endpoint. Both share the port so Playwright's webServer port check still works.
   const httpServer = createServer((req, res) => {
+    // Test-only readiness probe (test mode only): lets an external launcher
+    // (Playwright webServer) wait for a deterministic 200 instead of a sleep.
+    // No production surface — gated on testMode exactly like the reset route.
+    if (config.testMode && req.method === "GET" && req.url === "/__test/health") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("ok");
+      return;
+    }
+    // Test-only create-barrier controls (test mode only). Each control is scoped to
+    // a `holdId` minted by arm, so generations never cross-acknowledge or block.
+    if (config.testMode && req.method === "POST" && req.url === "/__test/hold-create") {
+      const armed = armCreateHold();
+      if (armed.conflict) {
+        // A live held create still occupies the barrier — refuse without touching
+        // it, so its gate/waiters/holdId all stay valid for the current test.
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "hold-active" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, holdId: armed.holdId }));
+      return;
+    }
+    // Long-poll: replies only once a create for THIS holdId has reached and parked
+    // at the barrier (server-reached ack), so a test never races ahead of the
+    // server. A stale/unknown id, or a release/reset before entry, resolves with
+    // `{ reached:false, cancelled:true }`.
+    if (config.testMode && req.method === "GET" && barrierPath(req.url) === "/__test/hold-create/reached") {
+      const holdId = barrierHoldId(req.url);
+      awaitCreateReached(holdId).then((result) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, ...result }));
+      });
+      return;
+    }
+    if (config.testMode && req.method === "POST" && barrierPath(req.url) === "/__test/release-create") {
+      const released = releaseCreateHold(barrierHoldId(req.url));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, released }));
+      return;
+    }
     if (
       config.testMode &&
       req.method === "POST" &&
@@ -500,25 +710,43 @@ export async function createServerApplication(env = process.env, options = {}) {
       // Awareness/Y.Doc) → clear all durable sheet rows (metadata + idempotency
       // clear via FK cascade) → clear rate-limiter state. Test mode only. A
       // durable-delete failure is contained: it returns one generic 500, leaves
-      // the limiter untouched, and never escapes the request callback.
-      disposeAllRooms();
-      try {
-        db.__test.resetAll();
-        rateLimiter.clear(); // only after the durable deletion succeeds
-        res.writeHead(200, { "Content-Type": "text/plain" });
-        res.end("ok");
-      } catch (err) {
-        console.error("test reset failed:", err);
-        respondInternalError(res);
-      }
+      // the limiter untouched, and never escapes the request callback. A held
+      // create is first released AND awaited to completion (settleCreateHold), so
+      // the DB is never cleared out from under a resumed held request.
+      settleCreateHold()
+        .then(() => {
+          disposeAllRooms();
+          db.__test.resetAll();
+          rateLimiter.clear(); // only after the durable deletion succeeds
+          res.writeHead(200, { "Content-Type": "text/plain" });
+          res.end("ok");
+        })
+        .catch((err) => {
+          console.error("test reset failed:", err);
+          respondInternalError(res);
+        });
       return;
     }
     if (req.method === "POST" && req.url === "/api/sheets") {
-      handleCreateSheet(req, res, {
-        db,
-        rateLimiter,
-        generateSheetId: mintSheetId,
-      }).catch((err) => {
+      // In test mode, if the barrier is armed this request ENTERS the hold: it has
+      // reached the server (handler entered, client awaiting) and marks the
+      // server-reached moment, then parks until release. `finish()` (in the
+      // `finally`) resolves the barrier's in-flight promise so reset/shutdown can
+      // await completion. Production resolves immediately (no barrier).
+      const dispatch = async () => {
+        const held = config.testMode ? enterCreateHold() : null;
+        try {
+          if (held) await held.gate; // park until the test releases
+          await handleCreateSheet(req, res, {
+            db,
+            rateLimiter,
+            generateSheetId: mintSheetId,
+          });
+        } finally {
+          if (held) held.finish(); // let reset/shutdown observe completion
+        }
+      };
+      dispatch().catch((err) => {
         // The handler owns its own error responses; this is a last-resort guard
         // so an unexpected throw never leaves the socket hanging. Uses the safe
         // centralized responder so it can never double-end.
@@ -721,6 +949,11 @@ export async function createServerApplication(env = process.env, options = {}) {
    */
   async function performCleanup() {
     const errors = [];
+
+    // 0. Release any armed test create-barrier AND await the in-flight held
+    //    request's completion, so a held create finishes before the DB is closed
+    //    and never blocks connection drain (test-only; a no-op in production).
+    await settleCreateHold();
 
     // 1. Stop accepting new HTTP connections / WS upgrades — only while the
     //    server is still listening (idempotent across retries). Register the

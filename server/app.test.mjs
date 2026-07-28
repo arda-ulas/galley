@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createServer as createNetServer } from "node:net";
+import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import { createServerApplication, resolveConfig } from "./app.mjs";
 import { PRODUCTION_DB_PATH } from "./persistence/db.mjs";
@@ -453,5 +454,234 @@ describe("createServerApplication — room disposal", () => {
     await app.shutdown();
     await clientClosed;
     expect(app.wss.clients.size).toBe(0);
+  });
+});
+
+/** A valid POST /api/sheets JSON body (standard base64 fields, unique token). */
+function createBody(text = "held") {
+  const doc = new Y.Doc();
+  doc.getText("content").insert(0, text);
+  const submittedUpdate = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+  const submittedStateVector = Buffer.from(Y.encodeStateVector(doc)).toString("base64");
+  doc.destroy();
+  return JSON.stringify({
+    creationToken: randomUUID(),
+    submittedUpdate,
+    submittedStateVector,
+    title: "t",
+    language: "typescript",
+    schemaVersion: 0,
+  });
+}
+
+describe("test-only create barrier — generation identity + reset/shutdown safety", () => {
+  /** Arm a fresh generation and return its holdId. */
+  async function arm(base) {
+    const r = await fetch(`${base}/__test/hold-create`, { method: "POST" });
+    expect(r.status).toBe(200);
+    const { holdId } = await r.json();
+    expect(holdId).toBeTruthy();
+    return holdId;
+  }
+  const reached = (base, holdId) =>
+    fetch(`${base}/__test/hold-create/reached?holdId=${holdId}`).then((r) => r.json());
+  const release = (base, holdId) =>
+    fetch(`${base}/__test/release-create?holdId=${holdId}`, { method: "POST" }).then((r) => r.json());
+  const create = (base) =>
+    fetch(`${base}/api/sheets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: createBody(),
+    });
+
+  it("holds a create until release, reporting the server-reached moment first", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const holdId = await arm(base);
+    let createResolved = false;
+    const createP = create(base).then((r) => {
+      createResolved = true;
+      return r;
+    });
+
+    const ack = await reached(base, holdId);
+    expect(ack.reached).toBe(true);
+    // Still held: the create cannot have resolved while parked on the gate.
+    expect(createResolved).toBe(false);
+
+    await release(base, holdId);
+    const res = await createP;
+    expect([200, 201]).toContain(res.status);
+  });
+
+  it("a second arm while a create is held returns 409 and leaves the held hold intact", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const a = await arm(base);
+    let aResolved = false;
+    const createA = create(base).then((r) => {
+      aResolved = true;
+      return r;
+    });
+    expect((await reached(base, a)).reached).toBe(true);
+
+    // A second arm while A is entered + active → 409, and A is left untouched.
+    const conflict = await fetch(`${base}/__test/hold-create`, { method: "POST" });
+    expect(conflict.status).toBe(409);
+    expect(aResolved).toBe(false); // create A remains held/unresolved
+    // A is still the current valid hold (its holdId still acknowledges reached).
+    expect((await reached(base, a)).reached).toBe(true);
+
+    // Reset while A is held: it must await A's completion, then clear its row.
+    const resetRes = await fetch(`${base}/__test/reset`, { method: "POST" });
+    expect(resetRes.status).toBe(200);
+    const res = await createA;
+    expect([200, 201]).toContain(res.status);
+    const { sheetId } = await res.json();
+    const boot = await fetch(`${base}/api/sheets/${sheetId}`);
+    expect(boot.status).toBe(404); // reset cleared A's committed row afterward
+
+    // After A settled, a new arm succeeds with a NEW holdId.
+    const b = await arm(base);
+    expect(b).not.toBe(a);
+  });
+
+  it("two consecutive arm/reach/release cycles WITHOUT reset — B is not acknowledged by A", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    // Cycle A.
+    const a = await arm(base);
+    const createA = create(base);
+    expect((await reached(base, a)).reached).toBe(true);
+    await release(base, a);
+    expect([200, 201]).toContain((await createA).status);
+
+    // Cycle B — a completed A must not block a fresh arm, and B has a NEW id.
+    const b = await arm(base);
+    expect(b).not.toBe(a);
+    // A stale query for A's id must NOT acknowledge B's generation.
+    expect((await reached(base, a)).reached).toBe(false);
+    const createB = create(base);
+    expect((await reached(base, b)).reached).toBe(true);
+    await release(base, b);
+    expect([200, 201]).toContain((await createB).status);
+  });
+
+  it("release BEFORE entry resolves reached waiters as not-reached/cancelled", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const holdId = await arm(base);
+    // Start a reached-waiter BEFORE any create arrives.
+    const waiterP = reached(base, holdId);
+    // Release before entry.
+    await release(base, holdId);
+    const ack = await waiterP;
+    expect(ack.reached).toBe(false);
+    expect(ack.cancelled).toBe(true);
+    // The next arm starts cleanly (fresh generation, distinct id).
+    const next = await arm(base);
+    expect(next).not.toBe(holdId);
+  });
+
+  it("reset BEFORE entry resolves reached waiters as not-reached/cancelled, next arm clean", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const holdId = await arm(base);
+    const waiterP = reached(base, holdId);
+    const resetRes = await fetch(`${base}/__test/reset`, { method: "POST" });
+    expect(resetRes.status).toBe(200);
+    const ack = await waiterP;
+    expect(ack.reached).toBe(false);
+    expect(ack.cancelled).toBe(true);
+
+    // A fresh arm after reset works and can hold a create end-to-end.
+    const next = await arm(base);
+    expect(next).not.toBe(holdId);
+    const createP = create(base);
+    expect((await reached(base, next)).reached).toBe(true);
+    await release(base, next);
+    expect([200, 201]).toContain((await createP).status);
+  });
+
+  it("a stale holdId neither acknowledges nor releases the current generation", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const stale = await arm(base);
+    await release(base, stale); // settle the first generation before it ever enters
+
+    // Current generation.
+    const current = await arm(base);
+    const createP = create(base);
+    expect((await reached(base, current)).reached).toBe(true);
+
+    // A query/release with the STALE id must not affect the current generation.
+    expect((await reached(base, stale)).reached).toBe(false);
+    const staleRel = await release(base, stale);
+    expect(staleRel.released).toBe(false);
+
+    // The current generation is still held; releasing it with its own id works.
+    await release(base, current);
+    expect([200, 201]).toContain((await createP).status);
+  });
+
+  it("reset while held awaits the resumed create BEFORE clearing the durable DB", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const holdId = await arm(base);
+    const createP = create(base);
+    expect((await reached(base, holdId)).reached).toBe(true);
+
+    // Reset must release the hold AND await the resumed create's completion, then
+    // clear the DB — so the create succeeds and its row is cleared afterward.
+    const resetRes = await fetch(`${base}/__test/reset`, { method: "POST" });
+    expect(resetRes.status).toBe(200);
+
+    const res = await createP;
+    expect([200, 201]).toContain(res.status); // the held create completed, not cut off
+    const { sheetId } = await res.json();
+
+    // The reset ran AFTER the create committed, so the sheet no longer exists.
+    const boot = await fetch(`${base}/api/sheets/${sheetId}`);
+    expect(boot.status).toBe(404);
+  });
+
+  it("shutdown while held releases and completes the create without hanging", async () => {
+    const t = await tmp();
+    const app = track(await makeApp(t));
+    await app.start();
+    const base = `http://127.0.0.1:${app.address().port}`;
+
+    const holdId = await arm(base);
+    const createP = create(base).catch((err) => err); // a closed socket is acceptable; a hang is not
+    expect((await reached(base, holdId)).reached).toBe(true);
+
+    // Shutdown must release the held create and await it, then stop cleanly.
+    await app.shutdown();
+    expect(app.state).toBe("stopped");
+    const settled = await createP;
+    if (settled && typeof settled.status === "number") {
+      expect([200, 201]).toContain(settled.status);
+    }
   });
 });

@@ -1,21 +1,26 @@
 import { DraftPage } from "./pages/DraftPage";
+import { SheetPage } from "./pages/SheetPage";
 import { UnavailableLink } from "./components/UnavailableLink";
 import { parseRoute } from "./lib/route";
 
 /**
- * M4 S5 route resolution. The pathname is resolved through the typed route model
- * (`parseRoute`): the root path is the local draft; every other path renders the
- * neutral unavailable surface. A well-formed `/{sheetId}` is RECOGNIZED as a
- * sheet route but stays DORMANT in this build — it renders the same neutral
- * surface, makes no server contact, and asserts no existence or connection
- * state. S6 activates shared routes (join, provider attach, live view); the
- * prototype provider/presence source remains unimported for those milestones.
+ * M4 S6 route resolution. The pathname is resolved through the typed route model
+ * (`parseRoute`): the root path is the local draft; a well-formed `/{sheetId}`
+ * is the shared-sheet join page; every other path renders the neutral unavailable
+ * surface.
+ *
+ * App is intentionally STATELESS and holds no route subscription: after Share
+ * replaces the URL with `/{sheetId}`, App does not re-render, so the sharer stays
+ * mounted on DraftPage (no remount). Direct navigation to `/{sheetId}` (new tab /
+ * refresh) resolves here to SheetPage.
  */
 export function App() {
   const route = parseRoute(window.location.pathname);
   if (route.kind === "draft") {
     return <DraftPage />;
   }
-  // `sheet` (dormant until S6) and `unavailable` share the neutral surface.
+  if (route.kind === "sheet") {
+    return <SheetPage sheetId={route.sheetId} />;
+  }
   return <UnavailableLink />;
 }

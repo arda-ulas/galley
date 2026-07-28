@@ -1,12 +1,16 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 // App reads window.location.pathname at render. Default jsdom path is "/".
 beforeEach(() => {
   window.history.replaceState({}, "", "/");
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 describe("App — root path renders the local draft", () => {
   it("renders the truthful state phrase, title, language control and editor", () => {
@@ -18,13 +22,14 @@ describe("App — root path renders the local draft", () => {
     expect(screen.getByLabelText("Code editor")).toBeInTheDocument();
   });
 
-  it("renders no remote claims or controls", () => {
+  it("exposes the Share control but no post-share/remote-save claims yet", () => {
     render(<App />);
-    expect(screen.queryByText(/\bLive\b|Connecting|Shared|Saving|Saved/)).toBeNull();
+    // The visible Share control is present at the M4 gate.
+    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    // …but no post-share or forbidden wording before the gesture.
+    expect(screen.queryByText(/Connecting|Shared|Saving|Saved|Reconnecting/)).toBeNull();
+    expect(screen.queryByText("Copy link")).toBeNull();
     expect(screen.queryByLabelText(/echo:\/\//)).toBeNull();
-    expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /copy .*link/i })).toBeNull();
-    expect(screen.queryByTitle(/·/)).toBeNull();
   });
 
   it("does not write a prototype identity to sessionStorage", () => {
@@ -57,21 +62,20 @@ describe("App — non-root paths do not render a draft", () => {
   );
 });
 
-describe("App — a well-formed sheet route is dormant in S5", () => {
-  it("renders the neutral unavailable surface, not the editor or any state claim", () => {
-    // A valid-SHAPE id (16 base64url chars). S5 recognizes it as a sheet route
-    // but does not activate it: no server contact, no editor, no connection
-    // wording. S6 activates shared routes.
+describe("App — a valid sheet route activates the join page", () => {
+  it("shows Connecting… with no editor before first sync (never an unavailable claim)", () => {
+    // A never-resolving bootstrap keeps the page in its initial connecting state
+    // and makes no real network call.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
     window.history.replaceState({}, "", "/abcdefghij123456");
     render(<App />);
-    expect(screen.getByText("This link is unavailable")).toBeInTheDocument();
-    // No draft chrome or editor.
-    expect(screen.queryByText("Local draft — not uploaded")).toBeNull();
-    expect(screen.queryByLabelText("Sheet title")).toBeNull();
+    expect(screen.getByText("Connecting…")).toBeInTheDocument();
     expect(screen.queryByLabelText("Code editor")).toBeNull();
-    // No connection-state claim of any kind.
-    expect(screen.queryByText(/\bLive\b|Connecting|Shared|Saving|Saved/)).toBeNull();
-    expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /copy .*link/i })).toBeNull();
+    expect(screen.queryByText("This link is unavailable")).toBeNull();
+    // No forbidden state wording during connect.
+    expect(screen.queryByText(/Saving|Saved|Reconnecting/)).toBeNull();
   });
 });

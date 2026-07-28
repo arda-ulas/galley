@@ -14,9 +14,9 @@ test.describe("M1 local draft at /", () => {
     await expect(page.getByLabel("Code editor")).toBeVisible();
     await expect(page.locator(".cm-editor")).toBeVisible();
 
-    // No remote claims or controls.
+    // The visible Share control is present (M4 gate); no post-share/remote claims.
+    await expect(page.getByRole("button", { name: "Share" })).toBeVisible();
     await expect(page.getByText(/\bLive\b|Connecting|Shared|Saving|Saved/)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /share/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /copy .*link/i })).toHaveCount(0);
     await expect(page.getByLabel(/echo:\/\//)).toHaveCount(0);
     await expect(page.getByTestId("timeline-rail")).toHaveCount(0);
