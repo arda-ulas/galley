@@ -5,9 +5,9 @@
 > - This document describes the architecture of `prototype-v1`. It remains accurate as a historical implementation reference.
 > - It is **not** the approved reconstruction architecture.
 > - `docs/PRODUCT_BRIEF.md` is the canonical product source.
-> - Reconstruction architecture will be documented only after the architecture-planning phase.
+> - It is **not** the source of truth for the active reconstruction: current architecture authority is `docs/RECONSTRUCTION_ARCHITECTURE.md` (design) plus `docs/RECONSTRUCTION_STATUS.md` (as-built through M4).
 > - The local-only historical-preview invariant (viewing history never mutates the live Y.Doc — see D-005) remains an approved product property.
-> - Persistence, routing, sheet identity, guest identity, retention, and Recent versions storage are still unresolved architecture decisions.
+> - Some subsystems this document lists as open are now resolved in the reconstruction (persistence, routing, sheet identity); others (guest identity migration, retention, Recent versions storage) remain planned.
 >
 > The prototype details below — one hardcoded room, module-level Y.Doc, `sessionStorage` identity, server-side starter seeding, snapshot cadence, and the permanent timeline — are preserved as historical evidence, not as reconstruction requirements.
 

@@ -60,41 +60,29 @@ Restore from version · named checkpoints · local recents · read-only links ·
 
 Code execution · terminal · package installation · deployment · multiple files · file tree · comments · chat · accounts · AI · autocomplete · linting · automatic formatting · presenter mode · classroom-scale collaboration.
 
-## Current prototype baseline
+## Reconstruction status
 
-**Status: historical implementation — not approved reconstruction architecture.**
+**The branch has progressed well beyond the raw prototype.** As of commit `3214cef` on `reconstruction/collab-first`, the reconstruction has completed the **shared-draft adoption milestone** (Share handoff): a local draft at `/`, a one-gesture Share that creates a durable server-backed sheet and adopts the draft into it without remounting the editor, authoritative title/language reconciled from the server, and direct-load/join of `/{sheetId}`. See `docs/RECONSTRUCTION_STATUS.md` for the as-built record and `docs/IMPLEMENTATION_PLAN.md` (M0–M12) for the sequence.
 
-The code on this branch reflects the `prototype-v1` implementation. It is useful technical foundation but is not the approved reconstruction target. Do not treat prototype code as the specification for reconstruction.
+Do **not** treat the retired `prototype-v1` code as the specification for reconstruction. Some prototype-era files remain in the tree but are **not wired into the app** and await cleanup (e.g. `src/lib/room.ts` and the unused `usePresence.ts` / `useProviderStatus.ts` / `useSessionIdentity.ts` hooks); the prototype's snapshot recorder, timeline, and `CollaborativeEditor`/`RoomPage` have already been removed. `src/styles/tokens.css` is **legacy styling still imported by `src/styles/global.css`**, so some global background/selection tokens remain active; it is not the authority for the current design direction, and it is not part of documentation cleanup — leave it in place.
 
-Notable prototype patterns and their reconstruction status:
-
-- `src/lib/room.ts` — module-level Y.Doc singleton, no teardown. **Under review.**
-- `server/index.mjs` — custom y-protocols WS server, single `/r/demo` room, server-side seeding. **Under review.**
-- `src/lib/snapshots.ts` — 1500ms idle-debounce snapshot recorder. **Under review** (cadence and bound are open details).
-- `src/components/CollaborativeEditor.tsx` — local-only past-preview pattern. **Preserved** — the local-only preview invariant (D-005) survives reconstruction.
-- `src/styles/tokens.css` — Amber token set. **Historical** — visual direction is undecided.
-
-Persistence, sheet identity, routing, guest identity migration, and Recent versions storage remain open architecture decisions. Do not speculatively refactor before architecture approval.
+The local-only historical-preview invariant (viewing history never mutates the live Y.Doc — D-005) remains an approved product property. Presence, Recent versions, durable `Shared · saved` state, and retention are sequenced but **not yet built** — do not assume they exist.
 
 **Prototype stack:** Vite · React · TypeScript · CodeMirror 6 · Yjs · y-websocket · y-codemirror.next · Tailwind · shadcn/ui · Framer Motion · Vitest · Playwright
 
 ## Visual direction
 
-**Status: undecided.**
+`docs/DESIGN_BRIEF.md` is the active design-direction document. **Paper** — a warm-white sheet with ink-first typography — is the current first-pass visual direction. The older dark/Amber timeline-first system is **historical and superseded**: do not apply amber tokens, amber metaphors, or "film strip / session afterglow" framing to reconstruction work.
 
-"Amber" is the prototype visual system. It is historical design, not the active visual direction for reconstruction.
-
-Future design research will determine the visual direction. No visual system is active until `docs/DESIGN_DIRECTION.md` exists and is committed.
-
-Do not apply amber tokens, amber metaphors, or "film strip / session afterglow" framing to reconstruction work.
+Naming the design direction does **not** authorize a redesign here. Design audit and portfolio polish remain review work, not implementation scope in a documentation pass.
 
 ## Architecture status
 
-`docs/ARCHITECTURE.md` describes `prototype-v1`. Reconstruction architecture is not yet approved.
+`docs/ARCHITECTURE.md` describes `prototype-v1` (historical). The reconstruction technical design is `docs/RECONSTRUCTION_ARCHITECTURE.md`, and the as-built slice completed so far (shared-draft adoption) is recorded in `docs/RECONSTRUCTION_STATUS.md`.
 
 The one architectural property confirmed to survive reconstruction: the **local-only preview invariant** — viewing history never mutates the live Y.Doc (D-005).
 
-Do not speculatively refactor `room.ts`, the server, snapshot storage, or routing before architecture is approved.
+Do not speculatively refactor unshipped subsystems (retained prototype leftovers such as `room.ts`, or storage/retention) ahead of their milestone.
 
 ## Evaluation criteria
 
@@ -126,6 +114,7 @@ Before implementing with or changing third-party library APIs, use Context7 for 
 **After editing:**
 1. Run validation:
    - `npm run test`
+   - `npm run test:integration`
    - `npx tsc --noEmit`
    - `npm run build`
    - `npm run test:e2e`

@@ -1,94 +1,122 @@
 # Echo/Rewind
 
-Real-time collaborative code sharing — an in-progress reconstruction on the
-`reconstruction/collab-first` branch.
+**Real-time collaborative code sharing.** Open a local code draft, press **Share**,
+and it becomes an authoritative server-backed *sheet* with a link you can send to
+a collaborator — who opens the same URL and edits the same document. The
+reconstruction is building a focused shared coding surface (closer to a
+collaborative code sheet than a full IDE), with version history planned as a
+quiet recovery surface rather than the centrepiece.
 
-> **Status: in-progress reconstruction, mid-milestone M4 (Share handoff).**
-> The collaboration-first product is being rebuilt from the ground up. The M1
-> local draft and the server prerequisites for Share exist, but the client
-> Share handoff (M4) is not finished, so this branch does **not** implement the
-> full collaborative experience yet. See "Current state" below for exactly what
-> exists today. `docs/PRODUCT_BRIEF.md` is the canonical product definition.
+> **Status: in-progress reconstruction.** The **shared-draft adoption milestone**
+> (Share handoff) is complete at commit `3214cef` on `reconstruction/collab-first`.
+> Live presence/cursors, durable "saved" state, and Recent versions are **planned,
+> not yet built** — see "Not yet built" below. `docs/PRODUCT_BRIEF.md` is the
+> canonical product definition; `docs/RECONSTRUCTION_STATUS.md` records what this
+> milestone actually ships.
 
-## Current state (this branch)
+## What it can do today
 
-The reconstruction separates the **visible product** from the **backend**; they
-are at different stages.
+- **Local draft at `/`** — a syntax-aware CodeMirror 6 editor with a document
+  title and language selector, real Yjs undo/redo, and Find/search. Nothing is
+  uploaded and no socket is opened while editing.
+- **Share → adopt** — one gesture creates a durable server sheet, copies the edit
+  link, and swaps the URL to `/{sheetId}` **without remounting the editor**, so the
+  exact same document, selection, and undo history carry over. Pre-Share edits
+  remain undoable after Share.
+- **Authoritative metadata** — after adoption the title and language are reconciled
+  from the server's bootstrap response and shown read-only; transient local values
+  never flash as if they were authoritative.
+- **Direct-load / join** — opening `/{sheetId}` in another browser bootstraps the
+  sheet's metadata, joins the shared session over WebSocket, and converges both
+  peers; a refresh rejoins the live sheet.
+- **Honest state and failure handling** — the UI distinguishes *Local draft*,
+  *Sharing…*, *Shared*, *Connecting…*, *Connection stopped.*, and a *couldn't share*
+  fallback that keeps the draft safe. A clipboard failure still surfaces a
+  selectable URL with a manual **Copy link** control.
 
-**Visible product — M1 local draft.** The app renders a single local code draft
-at `/`:
+## What's technically interesting
 
-- Syntax-aware CodeMirror 6 editing with document title and language selection
-- Real Yjs-backed undo/redo via the editor keymap
-- Find/search (highlight matches, Escape returns focus to the editor)
-- Fully local: no upload, no WebSocket, and no remote object are created while
-  editing
-- Every non-root path (including `/r/demo`) intentionally renders a neutral
-  "unavailable link" state rather than a draft or a false error cause
-
-The collaborative sheet UI, provider-connection UI, and presence are **not yet
-wired into the render tree**. There is no two-tab collaborative demo on this
-branch.
-
-**Backend — durable sheet creation and validated restart bootstrap.** A
-hand-rolled Node WebSocket server implements durable sheet creation over
-`node:sqlite`, validated restart bootstrap, per-sheet write serialization, and
-malformed-message containment. Live WebSocket edits are currently relayed in
-memory and are not yet persisted. It boots and is covered by the server tests,
-but no client UI consumes it yet.
+- **No-remount Share handoff** — the local draft's `Y.Doc`, `Awareness`, and
+  `Y.UndoManager` are handed to the collaboration provider intact, so sharing never
+  tears down the editor and never loses in-flight edits or undo history.
+- **Generation-safe session lifecycle** — the shared-sheet page tags each async
+  open with a generation id and abort controller, so StrictMode double-invocation,
+  route changes, and stale terminal callbacks can never publish into a newer
+  session or double-dispose a controller.
+- **Idempotent durable create** — creation is keyed by a per-draft token so a lost
+  response is recoverable without minting a second sheet; the server persists to
+  SQLite (WAL, per-sheet serialized writes).
+- **Deterministic end-to-end tests** — a test-only, generation-scoped create
+  *barrier* lets Playwright prove "an edit made while Share is in flight survives"
+  without sleeps, and reset/shutdown settle any barrier-held create before clearing or
+  closing storage.
 
 ## Tech stack
 
 Vite · React 19 · TypeScript · CodeMirror 6 · Yjs · y-websocket ·
-y-codemirror.next · y-protocols · `ws` · `node:sqlite` · Tailwind v4 ·
-Framer Motion · Vitest · Playwright
-
-Requires Node `>=22.22.2 <23` (see `.nvmrc`).
+y-codemirror.next · y-protocols · `ws` · `node:sqlite` · Tailwind v4 · Vitest ·
+Playwright. Requires Node `>=22.22.2 <23` (see `.nvmrc`).
 
 ## Running locally
 
-**App (M1 local draft)**
 ```
 npm install
-npm run dev        # http://127.0.0.1:5173
+npm run dev      # app at http://127.0.0.1:5173
+npm run server   # collaboration server at ws://127.0.0.1:1234 (for Share/join)
 ```
 
-**WebSocket server** (runs and passes its tests, but has no UI consumer yet)
-```
-npm run server     # ws://127.0.0.1:1234
-```
+Open `http://127.0.0.1:5173/`, type in the draft, then press **Share**. The URL
+becomes `/{sheetId}`; open that URL in a second browser to join. See the demo
+walkthrough (§5) in `docs/RECONSTRUCTION_STATUS.md` for the full flow.
 
 ## Testing
 
 ```
-npm run test              # Client unit tests — Vitest / jsdom (18 tests)
-npm run test:integration  # Server tests — Vitest / node (323 tests)
+npm run test              # client unit tests — Vitest / jsdom (273)
+npm run test:integration  # server + client-lifecycle tests — Vitest / node (345)
 npx tsc --noEmit          # TypeScript type check
-npm run build             # Production build (tsc -b && vite build)
-npm run test:e2e          # E2E — Playwright, M1 draft (8 tests)
+npm run build             # production build (tsc -b && vite build)
+npm run test:e2e          # Playwright end-to-end (12)
 ```
 
-349 tests total (18 client + 323 server + 8 e2e). Type check, build, and all
-suites pass. The server suite lives under a separate config
-(`vitest.integration.config.ts`) and is **not** included in `npm run test`.
+630 automated tests (273 unit + 345 integration + 12 e2e); type check and build
+clean. The integration suite uses a separate config
+(`vitest.integration.config.ts`) and is **not** part of `npm run test`.
 
-## History
+## Current status
 
-The original prototype — the "a collaborative code room where the timeline is
-the interface" concept, with snapshot timeline scrubbing and past-preview — is
-preserved as tags, not on this branch:
+- **Branch:** `reconstruction/collab-first` (active reconstruction).
+- **Milestone commit:** `3214cef` — completes the shared-draft adoption milestone
+  (Share handoff).
+- **Packaging:** a **draft** pull request into `main` tracks this milestone; it is
+  work-in-progress packaging, not the final reconstruction release.
+- **Stable checkpoints (never moved):** `week1-demo` (`ca8bb48`) and `prototype-v1`
+  (`4147372`) preserve the earlier timeline-first prototype.
 
-- `prototype-v1` (`4147372`) — stable historical collaboration prototype
-- `week1-demo` (`ca8bb48`) — earlier demo checkpoint
+## Not yet built (roadmap)
 
-`docs/ARCHITECTURE.md` documents that prototype and is explicitly marked
-historical. That timeline-first framing is retired and is not the reconstruction
-target.
+Live presence, remote cursors/selections, and jump-to-collaborator · durable
+`Shared · saved` state (content + metadata coverage) · title/language conflict
+handling · Recent versions and local read-only preview · Download/export ·
+retention/expiry. These are sequenced in `docs/IMPLEMENTATION_PLAN.md`; the next
+milestone is a **review/decision gate**, not yet started.
+
+## Intentionally out of scope
+
+Authentication and accounts · deployment infrastructure · multiple files or a file
+tree · code execution, terminal, or output panes · chat and comments · AI or
+autocomplete · linting or automatic formatting · a permanent timeline · restore
+from version · branching/forking. The product is deliberately a single shared code
+sheet, not an IDE.
 
 ## Documentation
 
-- `docs/PRODUCT_BRIEF.md` — canonical product definition
-- `docs/RECONSTRUCTION_ARCHITECTURE.md` — reconstruction architecture
-- `docs/IMPLEMENTATION_PLAN.md` — milestone plan (M0–M12)
-- `docs/DECISIONS.md` — decision log
-- `docs/ARCHITECTURE.md` — historical (`prototype-v1`)
+- `docs/PRODUCT_BRIEF.md` — canonical product definition.
+- `docs/RECONSTRUCTION_STATUS.md` — **as-built** status, architecture, demo, and QA
+  for the current milestone (`3214cef`).
+- `docs/RECONSTRUCTION_ARCHITECTURE.md` — the reconstruction architecture (design
+  contract this milestone implements a slice of).
+- `docs/IMPLEMENTATION_PLAN.md` — milestone plan (M0–M12).
+- `docs/DECISIONS.md` — decision log (prototype + reconstruction).
+- `docs/ARCHITECTURE.md` and `docs/archive/prototype-v1/` — historical
+  (`prototype-v1`); preserved, not active direction.

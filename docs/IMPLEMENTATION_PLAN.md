@@ -1,11 +1,11 @@
 # Implementation Plan — Galley reconstruction (revision 2)
 
-> **Status: planning only. No implementation authorized by this document.**
+> **Status: M0–M4 implemented through commit `3214cef` (shared-draft adoption); later milestones remain planned.** This document is the milestone roadmap, not proof of implementation. The current next step is packaging/review — not automatic continuation into M5. See `docs/RECONSTRUCTION_STATUS.md` for the as-built checkpoint.
 >
 > - `docs/PRODUCT_BRIEF.md` — canonical product contract.
 > - `docs/DESIGN_BRIEF.md` — canonical visual/interaction contract (governs final UI copy).
 > - `docs/RECONSTRUCTION_ARCHITECTURE.md` — **approved** technical architecture; this plan sequences it.
-> - `docs/ARCHITECTURE.md` / `docs/DECISIONS.md` — historical (`prototype-v1`).
+> - `docs/ARCHITECTURE.md` — historical (`prototype-v1`) architecture; `docs/DECISIONS.md` — mixed decision log (preserved prototype decisions plus active reconstruction decisions).
 > - A reconstruction QA checklist is a **deliverable of M12**, not an input (the only `QA_CHECKLIST.md` in the tree is historical under `docs/archive/prototype-v1/`).
 > - Checkpoints `week1-demo` and `prototype-v1` **must never move**. This plan touches no tags.
 > - **Working name** "Galley" is provisional; UI copy stays product-neutral ("the sheet").

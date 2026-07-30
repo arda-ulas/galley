@@ -1,6 +1,6 @@
 # Reconstruction Architecture — Galley (working name)
 
-> **Status: proposed (revision 2). Not yet approved. No implementation authorized by this document.**
+> **Status: approved in part and implemented through M4 (shared-draft adoption) at commit `3214cef`.** The M0–M4 material describes the implemented foundation; milestones beyond M4 remain **planned** and are not authorized merely by this document. See `docs/RECONSTRUCTION_STATUS.md` for the as-built checkpoint.
 >
 > - `docs/PRODUCT_BRIEF.md` is the canonical **product** contract.
 > - `docs/DESIGN_BRIEF.md` is the canonical **visual/interaction** contract; it governs final UI copy. This document defines which state **claims are technically legal**.

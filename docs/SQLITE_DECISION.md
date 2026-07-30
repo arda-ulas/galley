@@ -1,10 +1,9 @@
 # SQLite Toolchain Decision
 
 ## Status
-- **Proposed — approved pending final Codex verification.**
-- **Date:** 2026-07-11
-- **Milestone:** M0b (SQLite / toolchain decision spike)
-- **Implementation:** not started. This document decides the toolchain; M2 implements it.
+- **Implemented** for the current reconstruction server/persistence foundation (`node:sqlite`, WAL, `synchronous = FULL`, per-sheet write queue), through commit `3214cef`.
+- **Scope:** local/repository persistence for the reconstruction — **not** a production-readiness claim. Future migration or deployment concerns remain outside current scope.
+- **Origin:** decided in milestone M0b (SQLite / toolchain decision spike); the rationale below is unchanged.
 
 ## Context
 

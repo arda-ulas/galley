@@ -1,8 +1,6 @@
 # Echo/Rewind — Agent Collaboration Guide
 
-This document defines how AI agents (Claude Code and subagents) should operate in this repository.
-
-> **Authority note.** Root `CLAUDE.md` and `AGENTS.md` govern active agent behavior, and `docs/PRODUCT_BRIEF.md` is the canonical product source. This guide provides workflow and handoff discipline only. The `prototype-v1` product and design documents (now archived under `docs/archive/prototype-v1/`, e.g. `docs/archive/prototype-v1/PROJECT_SPEC.md`, `docs/archive/prototype-v1/DESIGN.md`, `docs/archive/prototype-v1/TASKS.md`, `docs/archive/prototype-v1/WEEK1_PLAN.md`) are **historical** — do not treat them as active direction. Where any instruction here conflicts with the brief or the root files, those govern.
+> **Status: superseded / historical.** Active agent instructions live in the root `AGENTS.md` and `CLAUDE.md`; `docs/PRODUCT_BRIEF.md` is the canonical product source and `docs/RECONSTRUCTION_STATUS.md` records the as-built milestone. This guide is preserved as **earlier workflow context** only — do not use it as active implementation authority. Some of its file, architecture, server-ownership, and visual-direction references predate the reconstruction and are stale (for example it names since-removed files and a never-created `docs/DESIGN_DIRECTION.md`). Where anything here conflicts with the root files or the brief, those govern.
 
 ---
 
