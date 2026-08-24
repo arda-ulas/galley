@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DownloadControl } from "../components/DownloadControl";
 import { DraftEditor } from "../components/DraftEditor";
 import { DraftShell } from "../components/DraftShell";
 import { ShareButton, ShareInfo, ShareStatus } from "../components/ShareControl";
@@ -51,7 +52,18 @@ export function DraftPage() {
       readOnly={!editable}
       statusSlot={<ShareStatus phrase={shareStatusPhrase(state)} state={state} />}
       title={shown.title}
-      trailing={<ShareButton onShare={() => share(title, language)} state={state} />}
+      trailing={
+        <>
+          {session ? (
+            <DownloadControl
+              getText={() => session.text.toString()}
+              language={shown.language}
+              title={shown.title}
+            />
+          ) : null}
+          <ShareButton onShare={() => share(title, language)} state={state} />
+        </>
+      }
       subBar={<ShareInfo onCopyLink={copyLink} state={state} />}
     >
       {session ? <DraftEditor language={shown.language} session={session} /> : null}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DownloadControl } from "../components/DownloadControl";
 import { DraftEditor } from "../components/DraftEditor";
 import { DraftShell } from "../components/DraftShell";
 import { UnavailableLink } from "../components/UnavailableLink";
@@ -123,6 +124,13 @@ export function SheetPage({ sheetId }: { sheetId: string }) {
         readOnly
         statusPhrase={phase === "stopped" ? "Connection stopped." : "Shared"}
         title={ready.bootstrap.title}
+        trailing={
+          <DownloadControl
+            getText={() => ready.session.text.toString()}
+            language={ready.bootstrap.language}
+            title={ready.bootstrap.title}
+          />
+        }
       >
         <DraftEditor language={ready.bootstrap.language} session={ready.session} />
       </DraftShell>

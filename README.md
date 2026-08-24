@@ -29,6 +29,10 @@ quiet recovery surface rather than the centrepiece.
 - **Direct-load / join** — opening `/{sheetId}` in another browser bootstraps the
   sheet's metadata, joins the shared session over WebSocket, and converges both
   peers; a refresh rejoins the live sheet.
+- **Download / export** — one click yields a file whose name derives from the
+  sheet title and whose extension derives from its language, containing exactly the
+  current live text. Available on the local draft and on a joined shared sheet.
+  Pure client: no upload, no server round-trip.
 - **Honest state and failure handling** — the UI distinguishes *Local draft*,
   *Sharing…*, *Shared*, *Connecting…*, *Connection stopped.*, and a *couldn't share*
   fallback that keeps the draft safe. A clipboard failure still surfaces a
@@ -97,7 +101,7 @@ clean. The integration suite uses a separate config
 
 Live presence, remote cursors/selections, and jump-to-collaborator · durable
 `Shared · saved` state (content + metadata coverage) · title/language conflict
-handling · Recent versions and local read-only preview · Download/export ·
+handling · Recent versions and local read-only preview ·
 retention/expiry. These are sequenced in `docs/IMPLEMENTATION_PLAN.md`; the next
 milestone is a **review/decision gate**, not yet started.
 
