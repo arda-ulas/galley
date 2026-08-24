@@ -1,0 +1,58 @@
+# Reference Fly.io configuration for Galley (M4.5 T4).
+#
+# NOT YET APPLIED — this repository's T4 gate was executed against the local
+# containerised topology in deploy/docker-compose.yml. This file encodes the same
+# two architectural requirements for a public host, ready for `fly deploy` once an
+# account is chosen. See docs/DEPLOYMENT.md §"Public host".
+#
+# The two settings that matter for correctness are the single machine and the
+# in-place deploy strategy. Galley is single-writer by design (see
+# IMPLEMENTATION_PLAN.md §1.2, D-021): two machines sharing one sheet would each
+# hold their own in-memory Y.Doc and overwrite each other's full-state snapshots.
+
+app = "galley"
+primary_region = "yyz"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  GALLEY_DB_PATH = "/data/galley.db"
+  GALLEY_STATIC_DIR = "/app/dist"
+  # GALLEY_TRUSTED_PROXIES is deliberately UNSET here.
+  #
+  # Leaving it unset is the SAFE default: X-Forwarded-For is ignored entirely and
+  # the client address falls back to the socket peer. On a PaaS that peer is the
+  # platform proxy, so the create rate limit degrades to a single global bucket —
+  # a availability trade-off, never a spoofing hole.
+  #
+  # To restore per-client limiting, observe the ACTUAL peer address the platform
+  # proxy connects from (it is platform- and region-specific), then set that exact
+  # address or its tightest CIDR. Do NOT guess, and do NOT use a broad range that
+  # could include client-reachable addresses — see docs/DEPLOYMENT.md §A10/A11 for
+  # why the local run had to narrow a /24 to a /32.
+
+# Exactly one machine. Raising this REQUIRES redesigning persistence first.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[deploy]
+  # "immediate" replaces the machine in place: the old instance is stopped before
+  # the new one starts, so there is never an interval with two live writers.
+  # Do NOT use a rolling/canary strategy with more than one machine.
+  strategy = "immediate"
+
+[mounts]
+  source = "galley_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never scale to zero or fan out: one writer, always.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1

@@ -46,6 +46,12 @@ import { loadValidatedSheet } from "./loadValidatedSheet.mjs";
 import { canonicalizeSubmission } from "./yjs.mjs";
 import { respondInternalError } from "./errors.mjs";
 import {
+  createClientAddressResolver,
+  resolveTrustProxyPolicy,
+} from "./clientAddress.mjs";
+import { createStaticHandler } from "./static.mjs";
+import path from "node:path";
+import {
   MAX_CANONICAL_STATE_BYTES,
   MAX_VISIBLE_CONTENT_CODE_UNITS,
   MAX_WS_AWARENESS_BYTES,
@@ -236,12 +242,41 @@ export function resolveConfig(env) {
     }
     dbPath = env.GALLEY_TEST_DB_PATH;
   } else {
-    // Normal mode: the DB path is fixed and NOT overridable from the environment.
-    dbPath = PRODUCTION_DB_PATH;
+    // Production (M4.5 T4): GALLEY_DB_PATH points SQLite at a mounted persistent
+    // directory. SQLite always creates the `-wal` and `-shm` siblings ALONGSIDE
+    // the database file, so aiming this one path into the volume colocates all
+    // three by construction. Unset/blank falls back to the repo-relative default
+    // so local `npm run server` is unchanged.
+    const configured = typeof env.GALLEY_DB_PATH === "string" ? env.GALLEY_DB_PATH.trim() : "";
+    dbPath = configured !== "" ? configured : PRODUCTION_DB_PATH;
   }
+  // Absolute form for auditable boot logging and for the T4 mount-point check.
+  // `openDatabase` creates the parent directory; it rejects ":memory:" and blank
+  // paths, so no in-memory fallback can be reached through this setting.
+  const resolvedDbPath = path.resolve(dbPath);
+
   const host = env.HOST ?? "127.0.0.1";
   const port = Number(env.PORT ?? "1234");
-  return { testMode, dbPath, host, port };
+
+  // Built client directory. Enabled by default in normal mode (production serves
+  // the SPA and the API from ONE origin, which is what topology.ts assumes when
+  // it derives wss:// from window.location). In test mode it stays OFF unless a
+  // test opts in explicitly, so the e2e stack — where Vite serves the client —
+  // is untouched.
+  const staticOverride =
+    typeof env.GALLEY_STATIC_DIR === "string" ? env.GALLEY_STATIC_DIR.trim() : "";
+  let staticDir = null;
+  if (env.GALLEY_DISABLE_STATIC === "1") {
+    staticDir = null;
+  } else if (staticOverride !== "") {
+    staticDir = path.resolve(staticOverride);
+  } else if (!testMode) {
+    staticDir = path.resolve("dist");
+  }
+
+  const trustProxy = resolveTrustProxyPolicy(env);
+
+  return { testMode, dbPath, resolvedDbPath, host, port, staticDir, trustProxy };
 }
 
 /**
@@ -265,6 +300,16 @@ export async function createServerApplication(env = process.env, options = {}) {
   // One process-owned write queue. Unused in commit 1 (creation lands in later
   // commits); constructed here so ownership lives with the application.
   const writeQueue = createWriteQueue();
+
+  // Bounded trusted-proxy policy (M4.5 T4). With no GALLEY_TRUSTED_PROXIES this
+  // resolver returns the socket peer, exactly as before T4.
+  const clientAddress = createClientAddressResolver(config.trustProxy);
+
+  // Built-client handler. Null when the directory is absent (client never built,
+  // or test mode) so the dispatch chain falls through to its normal 404.
+  const staticHandler = config.staticDir
+    ? await createStaticHandler({ root: config.staticDir })
+    : null;
 
   // Process-owned create rate limiter (per IP + per creation token). The clock
   // and id minter are injectable test seams; production uses the real ones.
@@ -741,6 +786,7 @@ export async function createServerApplication(env = process.env, options = {}) {
             db,
             rateLimiter,
             generateSheetId: mintSheetId,
+            clientAddress,
           });
         } finally {
           if (held) held.finish(); // let reset/shutdown observe completion
@@ -762,6 +808,26 @@ export async function createServerApplication(env = process.env, options = {}) {
       req.method === "GET" && /^\/api\/sheets\/([^/?#]+)$/.exec(req.url ?? "");
     if (bootstrapMatch) {
       handleBootstrapSheet(req, res, { db }, bootstrapMatch[1]);
+      return;
+    }
+    // Built client LAST, so every /api route above keeps precedence and the
+    // handler itself additionally refuses the reserved /api, /ws and /__test
+    // prefixes. A real WebSocket upgrade never reaches here at all: `ws`
+    // consumes the http server's "upgrade" event, which is a separate channel
+    // from this request listener.
+    if (staticHandler) {
+      staticHandler(req, res).then(
+        (handled) => {
+          if (handled) return;
+          if (res.writableEnded || res.headersSent) return;
+          res.writeHead(404);
+          res.end();
+        },
+        (err) => {
+          console.error("static dispatch error:", err);
+          respondInternalError(res);
+        },
+      );
       return;
     }
     res.writeHead(404);

@@ -1,0 +1,20 @@
+# TLS-terminating reverse proxy for the T4 deployment gate.
+#
+# This is the component that makes A9 (HTTPS -> WSS) and A10/A11 (bounded,
+# non-spoofable X-Forwarded-For) real rather than assumed: the app never sees the
+# client socket directly, exactly as on a hosted platform.
+{
+	# Local internal CA — no public ACME during a feasibility gate.
+	local_certs
+	admin off
+}
+
+galley.localhost:8443 {
+	# Caddy REPLACES any client-supplied X-Forwarded-For with the address it
+	# actually observed, then appends. This is what makes a single trusted hop
+	# correct: the entry the app selects was written by Caddy, not the client.
+	reverse_proxy app:8080 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

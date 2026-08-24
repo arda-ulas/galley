@@ -179,7 +179,7 @@ function createWithRetry(db, generateSheetId, params) {
 /**
  * @param {import('http').IncomingMessage} req
  * @param {import('http').ServerResponse} res
- * @param {{ db: any, rateLimiter: { checkCreate: (ip: string, token: string) => { ok: boolean } }, generateSheetId: () => string }} deps
+ * @param {{ db: any, rateLimiter: { checkCreate: (ip: string, token: string) => { ok: boolean } }, generateSheetId: () => string, clientAddress?: (req: import('http').IncomingMessage) => string }} deps
  */
 export async function handleCreateSheet(req, res, deps) {
   try {
@@ -209,7 +209,13 @@ export async function handleCreateSheet(req, res, deps) {
 
     // Rate limit AFTER the size-bounded body read and token validation, so the
     // atomic IP+token check runs before the expensive canonicalization/DB work.
-    const ip = req.socket.remoteAddress ?? "unknown";
+    // Client identity for the rate limiter. In production app.mjs injects a
+    // resolver carrying the bounded trusted-proxy policy (M4.5 T4); with no
+    // resolver injected this is the direct socket peer, i.e. the pre-T4
+    // behaviour, which is also what every existing test exercises.
+    const ip = deps.clientAddress
+      ? deps.clientAddress(req)
+      : (req.socket.remoteAddress ?? "unknown");
     if (!deps.rateLimiter.checkCreate(ip, creationToken).ok) {
       throw new RequestError(
         429,

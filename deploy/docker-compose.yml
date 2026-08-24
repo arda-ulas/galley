@@ -1,0 +1,69 @@
+# T4 deployment topology: ONE app writer + a TLS proxy + a persistent volume.
+#
+# Deliberately single-replica with no rolling update. Two overlapping app
+# instances would each hold their own in-memory Y.Doc for the same sheet and
+# write conflicting full-state snapshots — the failure mode T4/A5 exists to rule
+# out. Redeploy is stop-then-start (`docker compose up --force-recreate`), never
+# start-then-stop.
+name: galley-t4
+
+networks:
+  galley:
+    ipam:
+      config:
+        # Fixed subnet so GALLEY_TRUSTED_PROXIES can name it exactly rather than
+        # trusting whatever address Docker happens to assign.
+        - subnet: 172.31.77.0/24
+
+volumes:
+  galley-data:
+  caddy-data:
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    # Exactly one instance. Never raise this without redesigning persistence.
+    deploy:
+      replicas: 1
+    networks:
+      galley:
+    volumes:
+      - galley-data:/data
+    environment:
+      GALLEY_DB_PATH: /data/galley.db
+      GALLEY_STATIC_DIR: /app/dist
+      HOST: 0.0.0.0
+      PORT: "8080"
+      # Trust ONLY the proxy's exact address, one hop.
+      #
+      # Deliberately NOT the whole 172.31.77.0/24 subnet: the Docker bridge
+      # GATEWAY (172.31.77.1) also lives in that subnet and is the source address
+      # for anything arriving via a published port. Trusting the subnet would
+      # therefore let a direct client spoof X-Forwarded-For. A /32 for the proxy
+      # is the tight, correct rule.
+      GALLEY_TRUSTED_PROXIES: 172.31.77.10
+      GALLEY_TRUST_PROXY_HOPS: "1"
+    expose:
+      - "8080"
+    # Also published so the evidence run can hit the app DIRECTLY (bypassing the
+    # proxy) to prove an untrusted peer's forged header is ignored.
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: "no"
+
+  proxy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - app
+    networks:
+      galley:
+        # Static address so the app can trust exactly this peer and nothing else.
+        ipv4_address: 172.31.77.10
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    ports:
+      - "127.0.0.1:8443:8443"
+    restart: "no"
