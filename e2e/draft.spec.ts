@@ -2,6 +2,22 @@ import { expect, test } from "@playwright/test";
 
 const MOD = process.platform === "darwin" ? "Meta" : "Control";
 
+// Redo is verified through each platform's canonical, first-class binding from
+// the installed `yUndoManagerKeymap` — `{ key: 'Mod-y', mac: 'Mod-Shift-z', run:
+// redo }` — i.e. Cmd-Shift-Z on macOS and Ctrl-Y on Linux/Windows.
+//
+// Ctrl-Shift-Z is also bound on non-mac, but it is NOT reliable through
+// synthesized input: a Shift+letter chord can arrive with a lowercase `key`
+// ("z"), which `w3c-keyname` (mac=false) reports verbatim. CodeMirror then
+// resolves the Ctrl-Z (undo) binding first, and y-codemirror.next's undo command
+// returns truthy even on an empty stack (`undoManager.undo() != null || true`),
+// so the keymap treats the event as handled and never falls through to redo —
+// the redo becomes a silent no-op. Ctrl-Y carries no Shift and collides with no
+// other binding, so it exercises redo unambiguously on those platforms. On macOS
+// the same chord resolves cleanly (keyName maps the shifted code to "Z", which
+// routes to Cmd-Shift-Z), so the platform-native shortcut is used there.
+const REDO = process.platform === "darwin" ? `${MOD}+Shift+z` : `${MOD}+y`;
+
 test.describe("M1 local draft at /", () => {
   test("renders a truthful, empty local draft with no remote chrome", async ({
     page,
@@ -72,18 +88,24 @@ test.describe("M1 local draft at /", () => {
   test("real Yjs undo and redo via the editor keymap", async ({ page }) => {
     await page.goto("/");
     const token = `redo_${Date.now()}`;
-    await page.locator(".cm-content").click();
+    const editor = page.locator(".cm-content");
+    await editor.click();
+    // The keymap only fires when the editable surface holds focus, so every
+    // undo/redo below is gated on an explicit focus assertion rather than a
+    // timing assumption.
+    await expect(editor).toBeFocused();
     await page.keyboard.type(token);
-    await expect(page.locator(".cm-content")).toContainText(token);
+    await expect(editor).toContainText(token);
 
     // Undo (Mod-Z on all platforms).
+    await expect(editor).toBeFocused();
     await page.keyboard.press(`${MOD}+z`);
-    await expect(page.locator(".cm-content")).not.toContainText(token);
+    await expect(editor).not.toContainText(token);
 
-    // Redo (Mod-Shift-Z — the macOS redo binding, also bound on other platforms
-    // by the installed yUndoManagerKeymap).
-    await page.keyboard.press(`${MOD}+Shift+z`);
-    await expect(page.locator(".cm-content")).toContainText(token);
+    // Redo via the platform's canonical editor binding (see REDO above).
+    await expect(editor).toBeFocused();
+    await page.keyboard.press(REDO);
+    await expect(editor).toContainText(token);
   });
 
   test("Find: query highlights matches, Escape closes and returns focus to the editor", async ({
