@@ -5,5 +5,9 @@ playwright-report
 .DS_Store
 *.tsbuildinfo
 
+# Playwright MCP scratch output (console logs, traces). Previously ignored only
+# via .git/info/exclude, which is machine-local and does not travel with a clone.
+.playwright-mcp/
+
 # Runtime SQLite data (durable sheet server)
 data/

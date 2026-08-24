@@ -1,4 +1,7 @@
-# Echo/Rewind
+# Galley
+
+> The repository is still named `echo-rewind` after the retired timeline-first
+> product. The active product is **Galley**; `docs/PRODUCT_BRIEF.md` governs.
 
 **Real-time collaborative code sharing.** Open a local code draft, press **Share**,
 and it becomes an authoritative server-backed *sheet* with a link you can send to
@@ -8,11 +11,16 @@ collaborative code sheet than a full IDE), with version history planned as a
 quiet recovery surface rather than the centrepiece.
 
 > **Status: in-progress reconstruction.** The **shared-draft adoption milestone**
-> (Share handoff) is complete at commit `3214cef` on `reconstruction/collab-first`.
+> (Share handoff) completed at commit `3214cef` on `reconstruction/collab-first`.
+> Work since then is **M4.5 — consolidation, de-risking, and Download**: dead-code
+> removal, live-defect fixes, Download/export, a committed inbound-path benchmark
+> baseline, and a deployment-architecture gate. It is a closeout milestone, not new
+> architecture.
+>
 > Live presence/cursors, durable "saved" state, and Recent versions are **planned,
-> not yet built** — see "Not yet built" below. `docs/PRODUCT_BRIEF.md` is the
-> canonical product definition; `docs/RECONSTRUCTION_STATUS.md` records what this
-> milestone actually ships.
+> not yet built** — see "Not yet built" below. Nothing is deployed at a public URL.
+> `docs/PRODUCT_BRIEF.md` is the canonical product definition;
+> `docs/RECONSTRUCTION_STATUS.md` records what the M4 milestone actually shipped.
 
 ## What it can do today
 
@@ -76,34 +84,47 @@ walkthrough (§5) in `docs/RECONSTRUCTION_STATUS.md` for the full flow.
 ## Testing
 
 ```
-npm run test              # client unit tests — Vitest / jsdom (273)
-npm run test:integration  # server + client-lifecycle tests — Vitest / node (345)
+npm run test              # client unit tests — Vitest / jsdom (325)
+npm run test:integration  # server + client-lifecycle tests — Vitest / node (403)
 npx tsc --noEmit          # TypeScript type check
 npm run build             # production build (tsc -b && vite build)
-npm run test:e2e          # Playwright end-to-end (12)
+npm run test:e2e          # Playwright end-to-end (25)
+npm run bench             # inbound-path preflight benchmark → docs/BENCHMARK.md
 ```
 
-630 automated tests (273 unit + 345 integration + 12 e2e); type check and build
+753 automated tests (325 unit + 403 integration + 25 e2e); type check and build
 clean. The integration suite uses a separate config
-(`vitest.integration.config.ts`) and is **not** part of `npm run test`.
+(`vitest.integration.config.ts`) and is **not** part of `npm run test`. CI
+(`.github/workflows/ci.yml`) runs the whole set on every push and pull request.
 
 ## Current status
 
 - **Branch:** `reconstruction/collab-first` (active reconstruction).
-- **Milestone commit:** `3214cef` — completes the shared-draft adoption milestone
-  (Share handoff).
-- **Packaging:** a **draft** pull request into `main` tracks this milestone; it is
+- **Last milestone commit:** `3214cef` — completed the shared-draft adoption
+  milestone (Share handoff). M4.5 closeout work sits on top of it.
+- **Packaging:** a **draft** pull request into `main` tracks this branch; it is
   work-in-progress packaging, not the final reconstruction release.
+- **Deployment:** validated against a containerized single-writer topology with a
+  persistent volume (`docs/DEPLOYMENT.md`). **No public URL is running**; that is
+  M12.
 - **Stable checkpoints (never moved):** `week1-demo` (`ca8bb48`) and `prototype-v1`
   (`4147372`) preserve the earlier timeline-first prototype.
 
 ## Not yet built (roadmap)
 
-Live presence, remote cursors/selections, and jump-to-collaborator · durable
+Live presence, remote cursors/selections, and jump-to-collaborator (the awareness
+relay itself works, so y-codemirror.next paints its **unstyled anonymous default**
+caret for a remote peer; per-collaborator identity, colour, a presence surface,
+and Back-to-your-place are the unbuilt parts) · durable
 `Shared · saved` state (content + metadata coverage) · title/language conflict
-handling · Recent versions and local read-only preview ·
-retention/expiry. These are sequenced in `docs/IMPLEMENTATION_PLAN.md`; the next
-milestone is a **review/decision gate**, not yet started.
+handling · Recent versions and local read-only preview · retention/expiry · a
+public deployment. These are sequenced in `docs/IMPLEMENTATION_PLAN.md`; the next
+milestone is **M5 — durable live persistence and truthful state**.
+
+Note the shape of what exists today: a shared sheet is **durable at creation**,
+not continuously persisted. Live edits after Share are relayed between clients and
+held in the server's in-memory `Y.Doc`; writing them back on an interval, and the
+honest Saving/Saved state that must accompany it, is M5.
 
 ## Intentionally out of scope
 
@@ -122,5 +143,9 @@ sheet, not an IDE.
   contract this milestone implements a slice of).
 - `docs/IMPLEMENTATION_PLAN.md` — milestone plan (M0–M12).
 - `docs/DECISIONS.md` — decision log (prototype + reconstruction).
+- `docs/BENCHMARK.md` — committed inbound-path benchmark baseline and verdict.
+- `docs/DEPLOYMENT.md` — deployment-architecture gate: topology, volume, and the
+  single-writer evidence.
+- `docs/screenshots/` — dated M4 milestone screenshots.
 - `docs/ARCHITECTURE.md` and `docs/archive/prototype-v1/` — historical
   (`prototype-v1`); preserved, not active direction.
