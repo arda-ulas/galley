@@ -4,8 +4,9 @@ Captured 2026-07-29 against the shared-draft adoption milestone (commit `3214cef
 on `reconstruction/collab-first`), and moved here from the repository root by
 M4.5 T6.
 
-**These are a dated record, not a picture of current `HEAD`.** They will be
-superseded at M12. Two things already differ:
+**These are a dated record, not a picture of current `HEAD`.** For current-HEAD
+frames see [`current/`](current/) — this set is preserved as the M4 evidence it
+was captured as. Two things already differ from the current build:
 
 - The header gained a **Download** control (M4.5 T5), so the header row in 01,
   02, 03, 07, and 08 is one control short of the current build.
@@ -18,7 +19,7 @@ superseded at M12. Two things already differ:
 | `02-local-draft-edited.png` | The same draft after typing, with syntax highlighting. Still local; nothing uploaded. |
 | `03-shared-after-adoption.png` | Immediately after Share: URL is `/{sheetId}`, title/language locked to authoritative metadata, access-truth sub-bar visible. |
 | `04-joined-shared-sheet.png` | A second browser that joined by link and converged on the same document. Carries a remote caret — see below. |
-| `05-refresh-durability.png` | The shared sheet after a full page refresh — content rehydrated from the server. Carries a remote caret — see below. |
+| `05-refresh-rejoin.png` | The shared sheet after a full page refresh — the browser rejoined the live room and resynced from it. Carries a remote caret — see below. |
 | `06-unavailable-link.png` | The neutral unavailable surface for a path that is not a valid sheet route. |
 | `07-narrow-viewport-header.png` | Header layout at a narrow viewport (1024×720). |
 | `08-share-focus.png` | The Share control with a visible keyboard focus ring on a long title. |
@@ -51,3 +52,9 @@ frames reach the other client, not as evidence of a shipped presence feature.
 > and renamed on being tracked. The neutral name is kept deliberately: the
 > original asserted a *productized* remote-cursor feature that does not exist,
 > while the frame in fact shows the library's unstyled anonymous default.
+
+> `05-refresh-rejoin.png` was captured as `05-refresh-durability.png` and renamed
+> for the same reason. Refresh here rejoined a room the server process was still
+> holding in memory; it is **not** evidence that post-creation live edits survive
+> a server restart. Only the creation-time canonical state is durable today —
+> continuous persistence is M5.

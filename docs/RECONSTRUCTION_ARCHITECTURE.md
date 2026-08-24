@@ -1,4 +1,4 @@
-# Reconstruction Architecture — Galley (working name)
+# Reconstruction Architecture — Galley
 
 > **Status: approved in part and implemented through M4 (shared-draft adoption) at commit `3214cef`.** The M0–M4 material describes the implemented foundation; milestones beyond M4 remain **planned** and are not authorized merely by this document. See `docs/RECONSTRUCTION_STATUS.md` for the as-built checkpoint.
 >
@@ -6,7 +6,7 @@
 > - `docs/DESIGN_BRIEF.md` is the canonical **visual/interaction** contract; it governs final UI copy. This document defines which state **claims are technically legal**.
 > - `docs/ARCHITECTURE.md` describes `prototype-v1` only and is **historical**.
 > - Revision 2 resolves the Codex review. Every UI-state claim below maps to a concrete durable proof; where the strongest honest claim depends on a not-yet-built mechanism, that is stated, not assumed.
-> - **Working name** "Galley" is **provisional** (legal clearance incomplete). Proposed UI copy uses product-neutral wording ("the sheet").
+> - **Galley** is the adopted product name (see `docs/DESIGN_BRIEF.md` §1); the repository slug stays `echo-rewind` for historical continuity. Proposed UI copy still uses product-neutral wording ("the sheet").
 >
 > **Last updated:** 2026-07-11.
 

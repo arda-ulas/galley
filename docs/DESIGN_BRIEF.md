@@ -1,4 +1,4 @@
-# Design Brief — Galley (working name)
+# Design Brief — Galley
 
 **Status:** canonical final design direction for the reconstruction.
 **Scope authority:** `docs/PRODUCT_BRIEF.md` remains the canonical product definition. This brief defines *how the product looks, speaks, and behaves visually* — it does not add, remove, or alter product scope.
@@ -10,10 +10,10 @@
 
 ## 1. Product and brand framing
 
-- **Working name: Galley.** A galley is the typeset proof sheet handed to one trusted reader before publication — the product's lifecycle as a noun: composed locally, deliberately shared, never claimed as the published permanent artifact.
+- **Name: Galley.** A galley is the typeset proof sheet handed to one trusted reader before publication — the product's lifecycle as a noun: composed locally, deliberately shared, never claimed as the published permanent artifact.
 - **Positioning (one sentence):** *Paste code into a local draft, share one link, and think it through together — with live cursors, honest sync state, and quiet Recent versions when recovery is needed.*
 - **Name ↔ lifecycle:** local draft = the galley being set · Share = handing the proof to one trusted reader · edit link = possession of the proof · Recent versions = earlier pulls of the same proof · export = taking the text back to the real print run (the user's own environment).
-- **Legal status:** the name is **provisional**. Trademark screening, domain, npm/GitHub, and crowding verification are **not complete**. No repository rename, wordmark lock, or public use until clearance passes. All UI copy in this brief uses product-neutral wording ("this sheet") except where the name is explicitly illustrative.
+- **Name status:** Galley is the **adopted product name** — it is what the application, its documentation, and this repository call the product. Trademark screening, domain, and crowding verification are **not complete**, so no wordmark is locked and no exclusivity is claimed; the GitHub slug and npm package stay `echo-rewind` for historical continuity rather than as a pending rename. All UI copy in this brief uses product-neutral wording ("this sheet") except where the name is explicitly illustrative.
 
 ## 2. Visual thesis
 
