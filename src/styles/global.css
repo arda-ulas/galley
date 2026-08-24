@@ -1,13 +1,32 @@
 @import "tailwindcss";
-@import "./tokens.css";
+
+/*
+ * Global page foundation (M4.5 T2 / DEF-1).
+ *
+ * The retired `tokens.css` amber/dark token set is gone. The three rules that
+ * reached the rendered page through it — the `html` background, the `html`
+ * color, and `::selection` — now carry literal Paper values matching the frozen
+ * `PAPER` object in `src/lib/paperTheme.ts` (canvas / ink / accentYou). They are
+ * duplicated as literals rather than imported because CSS cannot read the TS
+ * constant; `paperTheme.ts` remains the single source of truth for component
+ * styling, and any change here must be made there too.
+ *
+ * `color-scheme` is `light`, not `dark`: it governs the native UI rendered by
+ * the browser rather than by us — the `<select>` dropdown in the header,
+ * scrollbars, and default focus rings — which previously rendered dark inside a
+ * warm-white sheet.
+ */
+:root {
+  color-scheme: light;
+}
 
 * {
   box-sizing: border-box;
 }
 
 html {
-  background: var(--bg);
-  color: var(--text);
+  background: #ece7dd; /* PAPER.canvas */
+  color: #1d1b17; /* PAPER.ink */
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -22,6 +41,12 @@ select {
   font: inherit;
 }
 
+/*
+ * Non-CodeMirror selection. CodeMirror paints its own selection layer from
+ * `paperEditorTheme`; this covers the header, the sub-bar, and the status
+ * surfaces. Same restrained blue accent at the same 14% wash the editor uses,
+ * so a selection reads identically inside and outside the editor.
+ */
 ::selection {
-  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: rgba(59, 91, 165, 0.14); /* PAPER.accentYou @ 14% */
 }

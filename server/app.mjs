@@ -442,10 +442,19 @@ export async function createServerApplication(env = process.env, options = {}) {
   }
 
   /**
-   * Test seam ONLY: get-or-create an EMPTY room by arbitrary name. Never used by
-   * the collaboration WebSocket path (which hydrates through
-   * acquireHydratedRoom); retained so lifecycle/disposal tests can exercise room
-   * teardown deterministically.
+   * Test seam ONLY — reachable exclusively as `app.__test.getRoom` (DEF-5).
+   *
+   * Get-or-create an EMPTY room by ARBITRARY name, bypassing `loadValidatedSheet`
+   * entirely. It shares the `rooms` map with `acquireHydratedRoom`, so calling it
+   * with a real sheet id would shadow that sheet with an empty doc and the next
+   * joiner would sync against nothing. It is unreachable from the network — no
+   * request path calls it — but it was previously exported at the top level
+   * alongside production accessors, where nothing marked it as unsafe to call.
+   *
+   * It is retained (not deleted) because the lifecycle/disposal tests need a room
+   * whose teardown they can observe without first creating a durable sheet; it
+   * now lives under `__test` with the other faults and seams, so its status is
+   * unambiguous at every call site.
    */
   function getRoom(name) {
     const existing = rooms.get(name);
@@ -1182,9 +1191,11 @@ export async function createServerApplication(env = process.env, options = {}) {
     rateLimiter,
     // Test seams — never used by production callers.
     rooms,
-    getRoom,
     disposeAllRooms,
     __test: {
+      // DEF-5: get-or-create an EMPTY room by arbitrary name. See its definition
+      // for why this must never be reachable as a production accessor.
+      getRoom,
       /**
        * Arm a one-shot buildRoom() failure that fires after Awareness has been
        * created (both Y.Doc and Awareness exist) but before the room is returned.

@@ -5,9 +5,12 @@ import {
   canonicalizeSubmission,
   decodeStateVectorStrict,
   YjsValidationError,
-  MAX_VISIBLE_CONTENT_CODE_UNITS,
-  MAX_CANONICAL_STATE_BYTES,
 } from "./yjs.mjs";
+// DEF-9: the limits are asserted against their single declaration site.
+import {
+  MAX_CANONICAL_STATE_BYTES,
+  MAX_VISIBLE_CONTENT_CODE_UNITS,
+} from "./limits.mjs";
 
 /** Encode a submission (update + matching vector) from a mutated Y.Doc. */
 function submission(mutate) {

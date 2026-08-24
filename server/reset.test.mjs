@@ -71,7 +71,7 @@ describe("POST /__test/reset — durable reset", () => {
   it("clears rooms, durable rows (via cascade), and limiter, then stays usable", async () => {
     const { app, port, dbPath } = await startApp();
     const sheetId = createSheet(app);
-    app.getRoom("live-room");
+    app.__test.getRoom("live-room");
     app.rateLimiter.checkCreate("1.2.3.4", "some-token");
 
     // Preconditions.
@@ -98,7 +98,7 @@ describe("POST /__test/reset — durable reset", () => {
   it("contains a durable-delete failure without clearing the limiter, then recovers", async () => {
     const { app, port, dbPath } = await startApp();
     const sheetId = createSheet(app);
-    app.getRoom("live-room");
+    app.__test.getRoom("live-room");
     app.rateLimiter.checkCreate("1.2.3.4", "some-token");
     expect(app.rooms.size).toBe(1);
     expect(app.rateLimiter.size().ip).toBe(1);

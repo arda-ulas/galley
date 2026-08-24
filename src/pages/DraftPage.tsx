@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DraftEditor } from "../components/DraftEditor";
 import { DraftShell } from "../components/DraftShell";
-import { ShareButton, ShareInfo } from "../components/ShareControl";
+import { ShareButton, ShareInfo, ShareStatus } from "../components/ShareControl";
 import type { LanguageId } from "../lib/languages";
 import {
   displayedMetadata,
@@ -49,7 +49,7 @@ export function DraftPage() {
       onLanguageChange={(v) => editable && setLanguage(v)}
       onTitleChange={(v) => editable && setTitle(v)}
       readOnly={!editable}
-      statusPhrase={shareStatusPhrase(state)}
+      statusSlot={<ShareStatus phrase={shareStatusPhrase(state)} state={state} />}
       title={shown.title}
       trailing={<ShareButton onShare={() => share(title, language)} state={state} />}
       subBar={<ShareInfo onCopyLink={copyLink} state={state} />}

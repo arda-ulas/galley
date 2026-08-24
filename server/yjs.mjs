@@ -32,14 +32,20 @@
 
 import * as Y from "yjs";
 import * as decoding from "lib0/decoding";
+// DEF-9: these two limits are declared ONCE, in limits.mjs. This module used to
+// re-declare them with identical values, giving the create path and the
+// canonicalizer two sources of truth that could silently drift apart.
+import {
+  MAX_CANONICAL_STATE_BYTES,
+  MAX_VISIBLE_CONTENT_CODE_UNITS,
+} from "./limits.mjs";
 
 // The one permitted shared root and its required type.
 const CONTENT_ROOT = "content";
 
 // Visible text is measured in UTF-16 code units (JS string length). Canonical
-// state is the server-encoded update byte length.
-export const MAX_VISIBLE_CONTENT_CODE_UNITS = 250_000;
-export const MAX_CANONICAL_STATE_BYTES = 512 * 1024; // 512 KiB
+// state is the server-encoded update byte length. Both values live in
+// limits.mjs; see the import above.
 
 /**
  * A safe, typed validation failure. The message is intentionally generic and

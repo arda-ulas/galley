@@ -11,6 +11,13 @@ type DraftShellProps = {
   children: ReactNode;
   /** Welded state phrase (default: the local-draft phrase). */
   statusPhrase?: string;
+  /**
+   * Optional replacement for the default status element. `DraftPage` supplies
+   * `ShareStatus`, which owns the post-Share focus target (DEF-4); pages with no
+   * focus handoff (the joiner) leave this unset and get the plain phrase.
+   * Whichever renders carries `data-testid="draft-state"`.
+   */
+  statusSlot?: ReactNode;
   /** When true, title/language are shown read-only (sharing / shared / joiner). */
   readOnly?: boolean;
   /** Header-right slot — the Share control while local. */
@@ -34,6 +41,7 @@ export function DraftShell({
   onLanguageChange,
   children,
   statusPhrase = "Local draft — not uploaded",
+  statusSlot,
   readOnly = false,
   trailing,
   subBar,
@@ -87,12 +95,14 @@ export function DraftShell({
         <span aria-hidden style={{ color: PAPER.rule }}>
           ·
         </span>
-        <span
-          data-testid="draft-state"
-          style={{ color: PAPER.inkMuted, whiteSpace: "nowrap" }}
-        >
-          {statusPhrase}
-        </span>
+        {statusSlot ?? (
+          <span
+            data-testid="draft-state"
+            style={{ color: PAPER.inkMuted, whiteSpace: "nowrap" }}
+          >
+            {statusPhrase}
+          </span>
+        )}
         {trailing ? <div className="flex items-center gap-2">{trailing}</div> : null}
       </header>
 

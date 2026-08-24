@@ -365,7 +365,7 @@ describe("createServerApplication — room disposal", () => {
   it("creates a fresh room with empty content (no starter seeding)", async () => {
     const t = await tmp();
     const app = track(await makeApp(t));
-    const room = app.getRoom("fresh");
+    const room = app.__test.getRoom("fresh");
     expect(room.doc.getText("content").toString()).toBe("");
   });
 
@@ -373,7 +373,7 @@ describe("createServerApplication — room disposal", () => {
     const t = await tmp();
     const app = track(await makeApp(t));
     await app.start();
-    app.getRoom("demo"); // create a live in-memory room
+    app.__test.getRoom("demo"); // create a live in-memory room
 
     const res = await fetch(
       `http://127.0.0.1:${app.address().port}/__test/reset`,
@@ -383,7 +383,7 @@ describe("createServerApplication — room disposal", () => {
     expect(app.rooms.size).toBe(0); // live room state cleared
 
     // A room recreated after reset carries no starter content.
-    const rebuilt = app.getRoom("demo");
+    const rebuilt = app.__test.getRoom("demo");
     expect(rebuilt.doc.getText("content").toString()).toBe("");
   });
 
@@ -392,7 +392,7 @@ describe("createServerApplication — room disposal", () => {
     const app = track(await makeApp(t));
     await app.start();
 
-    const room = app.getRoom("demo");
+    const room = app.__test.getRoom("demo");
     let docDestroyed = false;
     let awarenessDestroyed = false;
     room.doc.once("destroy", () => {
@@ -419,7 +419,7 @@ describe("createServerApplication — room disposal", () => {
     const app = track(await makeApp(t));
     await app.start();
 
-    const room = app.getRoom("demo");
+    const room = app.__test.getRoom("demo");
     let docDestroyed = false;
     let awarenessDestroyed = false;
     room.doc.once("destroy", () => {
