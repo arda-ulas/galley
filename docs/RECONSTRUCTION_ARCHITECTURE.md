@@ -254,11 +254,30 @@ Three **independent** machines. The legal UI phrase is a function of their combi
 
 ## 8. Durable acknowledgement
 
+> **⚠ SUPERSEDED IN PART — do not implement the content comparison below as written.**
+> The `committedStateVector` content leg (payload field and client step 1) is **provably unsound**
+> and is replaced by the deletion-aware watermark in `docs/IMPLEMENTATION_PLAN.md` §6.4
+> (revision 4, decision **D-027**).
+>
+> **Why:** verified against the pinned `yjs 13.6.31`, a deletion changes canonical document state
+> while leaving `Y.encodeStateVector` byte-identical (`016f0b → 016f0b` same-client;
+> `010106 → 010106` cross-client). Yjs deletions create no new structs, so an insertion-clock
+> summary cannot observe them — as §0 of this document and `server/yjs.mjs` both note, *a state
+> vector is a per-client clock summary, not a content hash*. Implementing step 1 as written would
+> display **`Shared · saved` for a deletion that is not in the database**.
+>
+> The replacement carries an encoded `Y.Snapshot` (`{sv, ds}`) and compares state-vector subsumption
+> **plus** delete-set subset. The rest of this section — post-commit emission, the metadata leg,
+> and the write-ordering rules — **remains authoritative and unchanged**.
+
 **Payload (conceptual), emitted only after the SQLite transaction commits:**
 `{ sheetId, serverRevision, committedStateVector, committedMetadataRevision, committedAt }`
+→ *content leg superseded; see `IMPLEMENTATION_PLAN.md` §6.5.2 for the implemented codec.*
 
 **Client logic:**
-1. Compare `committedStateVector` with the current local state vector.
+1. ~~Compare `committedStateVector` with the current local state vector.~~ **Superseded** — compare
+   the committed **snapshot watermark** with the current local snapshot (`IMPLEMENTATION_PLAN.md`
+   §6.4.3), covering insertions **and** deletions.
 2. Compare `committedMetadataRevision` with the current local metadata revision.
 3. If local content **or** metadata is newer than what the ack covers → remain **dirty/`Saving…`**.
 4. Enter **`Shared · saved`** only when **both** content and metadata are durably covered.
