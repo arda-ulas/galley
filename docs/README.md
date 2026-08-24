@@ -6,6 +6,7 @@
 - **RECONSTRUCTION_STATUS.md** — **as-built** status, architecture, demo, and QA for the current milestone (shared-draft adoption, `3214cef`).
 - **RECONSTRUCTION_ARCHITECTURE.md** — reconstruction technical design contract (the milestone implements a slice of it).
 - **IMPLEMENTATION_PLAN.md** — milestone plan (M0–M12) sequencing the reconstruction.
+- **BENCHMARK.md** — committed pre-M5 baseline for the synchronous inbound path (M4.5 T3); the harness is `bench/preflight.mjs` (`npm run bench`).
 - **DECISIONS.md** — decision log: prototype decisions (statuses) plus durable reconstruction decisions (D-011+).
 - **DESIGN_BRIEF.md** — active design-direction authority; **Paper** is the current first-pass visual direction and it governs final UI copy (the dark/Amber timeline-first system is historical).
 - **SQLITE_DECISION.md** — persistence toolchain decision record (implemented for the current local persistence foundation).

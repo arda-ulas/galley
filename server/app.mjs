@@ -108,11 +108,18 @@ class WsMessageError extends Error {
  * current state (not an empty doc) so dependency and structural validation
  * reflect the real merge context. On success the caller applies the SAME bytes
  * to the authoritative doc. Nothing is persisted, normalized, or rewritten.
+ *
+ * Exported ONLY as the measurement seam for the M4.5 T3 inbound-path benchmark
+ * (`bench/preflight.mjs`, docs/IMPLEMENTATION_PLAN.md §5.3), which must time the
+ * real function rather than a copy of it. It is pure with respect to `doc`:
+ * everything it touches lives on a probe document that is destroyed before it
+ * returns, it reads no server state, and it is not reachable from the network
+ * except through applyWsSyncMessage below. Nothing else imports it.
  * @param {Y.Doc} doc authoritative room doc (read only here)
  * @param {Uint8Array} update untrusted client update bytes
  * @throws {WsMessageError} INVALID on any decode / integration / structure failure
  */
-function preflightSyncUpdate(doc, update) {
+export function preflightSyncUpdate(doc, update) {
   const currentState = Y.encodeStateAsUpdate(doc);
   const probe = new Y.Doc();
   try {
