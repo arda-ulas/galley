@@ -64,11 +64,13 @@ Code execution · terminal · package installation · deployment · multiple fil
 
 **The branch has progressed well beyond the raw prototype.** As of commit `3214cef` on `reconstruction/collab-first`, the reconstruction has completed the **shared-draft adoption milestone** (Share handoff): a local draft at `/`, a one-gesture Share that creates a durable server-backed sheet and adopts the draft into it without remounting the editor, authoritative title/language reconciled from the server, and direct-load/join of `/{sheetId}`. See `docs/RECONSTRUCTION_STATUS.md` for the as-built record and `docs/IMPLEMENTATION_PLAN.md` (M0–M12) for the sequence.
 
-Do **not** treat the retired `prototype-v1` code as the specification for reconstruction. Some prototype-era files remain in the tree but are **not wired into the app** and await cleanup (e.g. `src/lib/room.ts` and the unused `usePresence.ts` / `useProviderStatus.ts` / `useSessionIdentity.ts` hooks); the prototype's snapshot recorder, timeline, and `CollaborativeEditor`/`RoomPage` have already been removed. `src/styles/tokens.css` is **legacy styling still imported by `src/styles/global.css`**, so some global background/selection tokens remain active; it is not the authority for the current design direction, and it is not part of documentation cleanup — leave it in place.
+Do **not** treat the retired `prototype-v1` code as the specification for reconstruction. The prototype's snapshot recorder, timeline, and `CollaborativeEditor`/`RoomPage` were removed earlier; **M4.5 T1 deleted the remaining dead island** — eleven unreachable files (`src/lib/room.ts`, the `usePresence` / `useProviderStatus` / `useSessionIdentity` hooks, `AppShell` / `PresenceBar` / `ConnectionStatus`, `components/ui/{button,badge}.tsx`, `lib/cn.ts`, `lib/codeMirrorTheme.ts`) plus the six npm dependencies that served only them (`framer-motion`, `class-variance-authority`, `lucide-react`, `@radix-ui/react-slot`, `clsx`, `tailwind-merge`). `src/styles/tokens.css` is **legacy styling still imported by `src/styles/global.css`**, so some global background/selection tokens remain active; it is not the authority for the current design direction, and it is not part of documentation cleanup — leave it in place.
+
+**The invariant now holds and is enforced:** every non-test file under `src/` is reachable from `src/main.tsx`. `src/importGraph.test.ts` walks the import graph from the entry point and fails on any orphan, so a second dead island cannot accumulate silently.
 
 The local-only historical-preview invariant (viewing history never mutates the live Y.Doc — D-005) remains an approved product property. Presence, Recent versions, durable `Shared · saved` state, and retention are sequenced but **not yet built** — do not assume they exist.
 
-**Prototype stack:** Vite · React · TypeScript · CodeMirror 6 · Yjs · y-websocket · y-codemirror.next · Tailwind · shadcn/ui · Framer Motion · Vitest · Playwright
+**Reconstruction stack:** Vite · React · TypeScript · CodeMirror 6 · Yjs · y-websocket · y-codemirror.next · y-protocols · `ws` · `node:sqlite` · Tailwind · Vitest · Playwright. (shadcn/ui and Framer Motion were **prototype-only** and left the tree with the dead island in M4.5 T1.)
 
 ## Visual direction
 
@@ -82,7 +84,7 @@ Naming the design direction does **not** authorize a redesign here. Design audit
 
 The one architectural property confirmed to survive reconstruction: the **local-only preview invariant** — viewing history never mutates the live Y.Doc (D-005).
 
-Do not speculatively refactor unshipped subsystems (retained prototype leftovers such as `room.ts`, or storage/retention) ahead of their milestone.
+Do not speculatively refactor unshipped subsystems (storage/retention, room eviction) ahead of their milestone. `room.ts` is **not** a retained seam — it was deleted in M4.5 T1. The genuine retained-but-uncalled seams are `db.persistState`, `createWriteQueue`, and `db.getSheet`, consumed by M5/M10: they are not dead code and must not be deleted.
 
 ## Evaluation criteria
 
@@ -94,7 +96,7 @@ Do not optimize for: startup potential · monetization · market size · custome
 
 ## Documentation rule
 
-Before implementing with or changing third-party library APIs, use Context7 for current documentation. Do not rely only on memory for fast-moving APIs. Prioritize official docs for Vite, React, CodeMirror 6, Yjs, y-websocket, y-codemirror.next, Tailwind, shadcn/ui, Vitest, and Playwright.
+Before implementing with or changing third-party library APIs, use Context7 for current documentation. Do not rely only on memory for fast-moving APIs. Prioritize official docs for Vite, React, CodeMirror 6, Yjs, y-websocket, y-codemirror.next, Tailwind, Vitest, and Playwright.
 
 ## Workflow
 
