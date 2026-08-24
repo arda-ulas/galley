@@ -5,7 +5,7 @@
 // that only wires this factory to process signals.
 //
 // Test-mode boundary (single source of truth):
-// - ECHO_REWIND_TEST=1 is the ONLY server-level test flag.
+// - GALLEY_TEST=1 is the ONLY server-level test flag.
 // - Under it, GALLEY_TEST_DB_PATH is REQUIRED and is passed straight to
 //   openDatabase(); normal mode ignores it and uses the fixed production path.
 // - The persistence layer no longer reads any environment variable.
@@ -239,12 +239,12 @@ function applyWsAwarenessMessage(decoder, awareness, ws) {
  * @returns {{ testMode: boolean, dbPath: string, host: string, port: number }}
  */
 export function resolveConfig(env) {
-  const testMode = env.ECHO_REWIND_TEST === "1";
+  const testMode = env.GALLEY_TEST === "1";
   let dbPath;
   if (testMode) {
     if (!env.GALLEY_TEST_DB_PATH) {
       throw new Error(
-        "ECHO_REWIND_TEST=1 requires GALLEY_TEST_DB_PATH to be set",
+        "GALLEY_TEST=1 requires GALLEY_TEST_DB_PATH to be set",
       );
     }
     dbPath = env.GALLEY_TEST_DB_PATH;

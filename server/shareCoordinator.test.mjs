@@ -47,7 +47,7 @@ async function startApp() {
   const t = await createTempDb();
   temps.push(t);
   const app = await createServerApplication({
-    ECHO_REWIND_TEST: "1",
+    GALLEY_TEST: "1",
     GALLEY_TEST_DB_PATH: t.dbPath,
     HOST: "127.0.0.1",
     PORT: "0",

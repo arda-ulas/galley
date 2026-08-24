@@ -65,7 +65,7 @@ async function startApp(dbPath) {
     dbPath = t.dbPath;
   }
   const app = await createServerApplication({
-    ECHO_REWIND_TEST: "1",
+    GALLEY_TEST: "1",
     GALLEY_TEST_DB_PATH: dbPath,
     HOST: "127.0.0.1",
     PORT: "0",

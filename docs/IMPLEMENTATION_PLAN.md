@@ -59,10 +59,11 @@ shared document in one gesture without remounting the editor or losing undo stat
 collaboration and save state, and provides bounded read-only version recovery without disrupting the
 live session.
 
-The name **Galley is adopted conceptually** as of revision 3. UI copy remains product-neutral
-("this sheet"). **The GitHub repository slug stays `echo-rewind`** and `package.json` `"name"` stays
-`echo-rewind` until M12; there is no technical reason to rename earlier, and renaming breaks the
-existing remote, the draft PR, and every external link.
+The name **Galley is adopted** as of revision 3. UI copy remains product-neutral ("this sheet").
+The naming migration originally deferred to M12 was executed early, ahead of M5: **the GitHub
+repository slug and `package.json` `"name"` are both `galley`**. GitHub's rename preserves issues,
+pull requests, stars, Actions history, tags, and redirects from the old URL, so the deferral's
+stated cost did not materialise.
 
 ### 1.1 Hard scope — the v1 build list
 
@@ -1752,7 +1753,7 @@ Graphite themes · Point (pending `docs/experiments/POINT_EXPERIMENT.md`).
 | **D-023** | Versions are bounded by **both** a count and a total-bytes limit per sheet, enforced transactionally with the insert. |
 | **D-024** *(revised r4)* | Live durability is acknowledged by a new **`MSG_DURABLE = 4`** WebSocket message broadcast to **all** clients in a room after commit, because durability coverage is a property of the document, not of one client's edit. Type **4** was chosen after reading `y-websocket 3.0.0`, where `messageQueryAwareness = 3` is already taken; the design is purely additive and repurposes no existing type. The handler is registered on the provider's **per-instance** `messageHandlers` copy and writes nothing to the reply encoder. |
 | **D-025** | Persist scheduling uses a quiet debounce plus a max-latency cap, so `Saving…` cannot persist indefinitely under continuous typing. |
-| **D-026** | The name **Galley** is adopted conceptually; the repository slug and `package.json` name remain `echo-rewind` until M12. |
+| **D-026** *(executed)* | The name **Galley** is adopted. The rename originally deferred to M12 was executed early, ahead of M5: the GitHub repository slug and the `package.json` name are both `galley`, and the server test flag is `GALLEY_TEST`. The retired name survives only in `docs/archive/prototype-v1/`, in `docs/ARCHITECTURE.md`, and in records that must name the retired artifact to be truthful. |
 | **D-027** *(new r4)* | The durability watermark is a **deletion-aware encoded `Y.Snapshot`** (`{sv, ds}`), not a state vector. Verified against `yjs 13.6.31`: deletions leave `encodeStateVector` byte-identical while canonical state changes, so state-vector coverage would have authorized `Shared · saved` for an undeleted-in-storage deletion. Coverage is `sv` subsumption **plus** `equalDeleteSets(mergeDeleteSets([ds_c, ds_l]), ds_c)`, using only public exports. Galley never restores from these snapshots, so `gc: false` is **not** required. **If this comparison ever cannot be expressed without private Yjs internals, `saved` is withdrawn entirely rather than weakened.** |
 | **D-028** *(new r4)* | `livePersister` is the **sole owner** of all persistence lifecycle state. The room record holds no dirty, scheduled, queued, in-flight, or retry state — only an opaque persister handle. A persist attempt captures `{state, coverage, text}` in one synchronous block with no `await`, and any mutation accepted after capture guarantees a successor attempt. |
 | **D-029** *(new r4)* | SQLite faults are classified as **retryable** (BEGIN failure; statement failure with confirmed clean rollback) or **outcome-uncertain** (COMMIT failure, ROLLBACK failure), because the adapter **poisons** on the latter and no later write can succeed in-process. Outcome-uncertain failures never emit a durability success, schedule no retry, and require a process restart. |

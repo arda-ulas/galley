@@ -13,7 +13,7 @@
 - **Name: Galley.** A galley is the typeset proof sheet handed to one trusted reader before publication — the product's lifecycle as a noun: composed locally, deliberately shared, never claimed as the published permanent artifact.
 - **Positioning (one sentence):** *Paste code into a local draft, share one link, and think it through together — with live cursors, honest sync state, and quiet Recent versions when recovery is needed.*
 - **Name ↔ lifecycle:** local draft = the galley being set · Share = handing the proof to one trusted reader · edit link = possession of the proof · Recent versions = earlier pulls of the same proof · export = taking the text back to the real print run (the user's own environment).
-- **Name status:** Galley is the **adopted product name** — it is what the application, its documentation, and this repository call the product. Trademark screening, domain, and crowding verification are **not complete**, so no wordmark is locked and no exclusivity is claimed; the GitHub slug and npm package stay `echo-rewind` for historical continuity rather than as a pending rename. All UI copy in this brief uses product-neutral wording ("this sheet") except where the name is explicitly illustrative.
+- **Name status:** Galley is the **adopted product name** — it is what the application, its documentation, and this repository call the product. Trademark screening, domain, and crowding verification are **not complete**, so no wordmark is locked and no exclusivity is claimed. The name migration is complete: the GitHub repository slug and the `package.json` name are both `galley`. All UI copy in this brief uses product-neutral wording ("this sheet") except where the name is explicitly illustrative.
 
 ## 2. Visual thesis
 

@@ -34,6 +34,8 @@ test.describe("M1 local draft at /", () => {
     await expect(page.getByRole("button", { name: "Share" })).toBeVisible();
     await expect(page.getByText(/\bLive\b|Connecting|Shared|Saving|Saved/)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /copy .*link/i })).toHaveCount(0);
+    // The RETIRED prototype's room-address aria-label, named deliberately: the
+    // guard only works against the literal string it asserts is absent.
     await expect(page.getByLabel(/echo:\/\//)).toHaveCount(0);
     await expect(page.getByTestId("timeline-rail")).toHaveCount(0);
 

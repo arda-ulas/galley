@@ -6,7 +6,7 @@
 > - `docs/DESIGN_BRIEF.md` is the canonical **visual/interaction** contract; it governs final UI copy. This document defines which state **claims are technically legal**.
 > - `docs/ARCHITECTURE.md` describes `prototype-v1` only and is **historical**.
 > - Revision 2 resolves the Codex review. Every UI-state claim below maps to a concrete durable proof; where the strongest honest claim depends on a not-yet-built mechanism, that is stated, not assumed.
-> - **Galley** is the adopted product name (see `docs/DESIGN_BRIEF.md` §1); the repository slug stays `echo-rewind` for historical continuity. Proposed UI copy still uses product-neutral wording ("the sheet").
+> - **Galley** is the adopted product name (see `docs/DESIGN_BRIEF.md` §1) and the repository slug. Proposed UI copy still uses product-neutral wording ("the sheet").
 >
 > **Last updated:** 2026-07-11.
 

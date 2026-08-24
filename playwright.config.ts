@@ -28,7 +28,7 @@ export default defineConfig({
       // targets are already up.
       command: "node e2e/collabServer.mjs",
       env: {
-        ECHO_REWIND_TEST: "1",
+        GALLEY_TEST: "1",
         GALLEY_TEST_DB_PATH: E2E_DB,
         GALLEY_E2E_DB_PATH: E2E_DB,
         HOST: "127.0.0.1",

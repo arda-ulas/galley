@@ -2,14 +2,14 @@
 
 > **Status: active competitor-audit evidence.**
 >
-> This document records a manual browser audit conducted on 2026-07-10 for the Echo/Rewind reconstruction design-research phase. It supports `docs/DESIGN_RESEARCH_PLAN.md` and does not define product scope or final visual direction. `docs/PRODUCT_BRIEF.md` remains canonical.
+> This document records a manual browser audit conducted on 2026-07-10 for the Galley reconstruction design-research phase. It supports `docs/DESIGN_RESEARCH_PLAN.md` and does not define product scope or final visual direction. `docs/PRODUCT_BRIEF.md` remains canonical.
 
 ## Provenance
 
 - **Method:** browser-driven manual audit (Claude-in-Chrome), one macOS Chrome browser.
 - **Contexts:** one normal browser session, with a **second tab** used for initial multiplayer observation. The second tab was **not** a fully isolated context (same browser session).
 - **Captures:** 18 screenshots were saved manually **outside the repository**.
-- **Capture folder:** `~/Desktop/echo-rewind-competitor-audit-2026-07-10/`.
+- **Capture folder:** `~/Desktop/echo-rewind-competitor-audit-2026-07-10/`. The folder name records the repository's **pre-rename** slug, which is what it was called on the capture date; it is quoted verbatim so the provenance record stays literally true, and is not a current product name.
 - **Git:** screenshots are **not** part of Git in this pass.
 - **Missing image:** `COMP-codefile-02-captcha` is the only missing capture (state was observed live and recorded in notes).
 - **Evidence labels used throughout:**
@@ -209,7 +209,7 @@ A public gist presents one titled document (author / filename) with a descriptio
 | History entry point | "Revisions" tab, hidden behind one click | Directly observed | COMP-gist-02-document | Quiet entry |
 | Recovery model | Full git-backed revision history; per-revision diffs; Split/Unified toggle | Directly observed | COMP-gist-03-revisions | Permanent, diff/commit-shaped |
 | Export | Raw, Embed `<script>`, Download ZIP | Directly observed | COMP-gist-02-document | Dignified export |
-| Comments | Comment thread per gist | Directly observed | COMP-gist-02-document | Feature Echo/Rewind excludes |
+| Comments | Comment thread per gist | Directly observed | COMP-gist-02-document | Feature Galley excludes |
 | Live collaboration | None (single-author document) | Directly observed | COMP-gist-02-document | Not a live tool |
 
 #### Product takeaway
@@ -289,7 +289,7 @@ Not claimed: that the whole market has no recovery; that no competitor anywhere 
 **Which product is the closest conceptual threat?**
 > ShareCode.
 
-**Which parts of Echo/Rewind would still look derivative?**
+**Which parts of Galley would still look derivative?**
 Category table-stakes that will read as familiar regardless of execution:
 - browser code editor
 - syntax highlighting
@@ -310,7 +310,7 @@ Evidence-supported differentiators (where the distinctiveness must come from):
 
 ## Capture manifest
 
-The image files currently live **outside Git** in the local audit folder listed in Provenance (`~/Desktop/echo-rewind-competitor-audit-2026-07-10/`). They are not embedded here because local absolute paths would not resolve for other repository users.
+The image files currently live **outside Git** in the local audit folder listed in Provenance (`~/Desktop/echo-rewind-competitor-audit-2026-07-10/` — the pre-rename slug, quoted verbatim; see Provenance). They are not embedded here because local absolute paths would not resolve for other repository users.
 
 **Codeshare (8):**
 - COMP-codeshare-01-entry

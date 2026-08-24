@@ -1,4 +1,4 @@
-# Echo/Rewind — Agent Collaboration Guide
+# Galley — Agent Collaboration Guide
 
 > **Status: superseded / historical.** Active agent instructions live in the root `AGENTS.md` and `CLAUDE.md`; `docs/PRODUCT_BRIEF.md` is the canonical product source and `docs/RECONSTRUCTION_STATUS.md` records the as-built milestone. This guide is preserved as **earlier workflow context** only — do not use it as active implementation authority. Some of its file, architecture, server-ownership, and visual-direction references predate the reconstruction and are stale (for example it names since-removed files and a never-created `docs/DESIGN_DIRECTION.md`). Where anything here conflicts with the root files or the brief, those govern.
 

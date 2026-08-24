@@ -120,7 +120,7 @@ function createDurableSheet(app, sheetId, text = "live") {
 function makeApp(t, extraEnv = {}, options = {}) {
   return createServerApplication(
     {
-      ECHO_REWIND_TEST: "1",
+      GALLEY_TEST: "1",
       GALLEY_TEST_DB_PATH: t.dbPath,
       HOST: "127.0.0.1",
       PORT: "0",
@@ -169,15 +169,15 @@ describe("resolveConfig — test-mode boundary", () => {
     expect(cfg.dbPath).toBe(PRODUCTION_DB_PATH);
   });
 
-  it("requires GALLEY_TEST_DB_PATH under ECHO_REWIND_TEST=1", () => {
-    expect(() => resolveConfig({ ECHO_REWIND_TEST: "1" })).toThrow(
+  it("requires GALLEY_TEST_DB_PATH under GALLEY_TEST=1", () => {
+    expect(() => resolveConfig({ GALLEY_TEST: "1" })).toThrow(
       /GALLEY_TEST_DB_PATH/i,
     );
   });
 
-  it("uses the provided test DB path under ECHO_REWIND_TEST=1", () => {
+  it("uses the provided test DB path under GALLEY_TEST=1", () => {
     const cfg = resolveConfig({
-      ECHO_REWIND_TEST: "1",
+      GALLEY_TEST: "1",
       GALLEY_TEST_DB_PATH: "/tmp/explicit.db",
     });
     expect(cfg.testMode).toBe(true);

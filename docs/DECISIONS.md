@@ -1,4 +1,4 @@
-# Echo/Rewind — Decision Log
+# Galley — Decision Log
 
 Decisions are recorded here when they have a non-obvious rationale or when a reasonable alternative was considered and rejected.
 

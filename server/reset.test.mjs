@@ -25,7 +25,7 @@ async function startApp() {
   const t = await createTempDb();
   temps.push(t);
   const app = await createServerApplication({
-    ECHO_REWIND_TEST: "1",
+    GALLEY_TEST: "1",
     GALLEY_TEST_DB_PATH: t.dbPath,
     HOST: "127.0.0.1",
     PORT: "0",
@@ -136,7 +136,7 @@ describe("POST /__test/reset — durable reset", () => {
     process.chdir(dir);
     let app;
     try {
-      // No ECHO_REWIND_TEST → normal mode; the fixed production DB path resolves
+      // No GALLEY_TEST → normal mode; the fixed production DB path resolves
       // under the throwaway cwd.
       app = await createServerApplication({ PORT: "0" });
       await app.start();

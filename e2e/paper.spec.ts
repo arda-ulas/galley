@@ -132,6 +132,8 @@ test.describe("Document identity (DEF-2)", () => {
   }) => {
     await page.goto("/");
     await expect(page).toHaveTitle("Galley");
+    // Names the RETIRED product deliberately — the guard is only meaningful
+    // against the literal wording it asserts is absent.
     await expect(page).not.toHaveTitle(/Echo|Rewind/);
   });
 

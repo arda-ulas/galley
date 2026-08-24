@@ -1,4 +1,4 @@
-# Echo/Rewind — Claude Code Instructions
+# Galley — Claude Code Instructions
 
 ## Canonical source of truth
 

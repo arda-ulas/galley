@@ -39,7 +39,7 @@ const BUSY_TIMEOUT_MS = 5000;
 
 // Fixed production database path. The server composition layer (server/app.mjs)
 // resolves the actual path — honoring an explicit test path only under the
-// server-level ECHO_REWIND_TEST flag — and passes it to openDatabase(). This
+// server-level GALLEY_TEST flag — and passes it to openDatabase(). This
 // module no longer reads any environment variable.
 export const PRODUCTION_DB_PATH = "data/galley.db";
 

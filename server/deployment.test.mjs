@@ -50,7 +50,7 @@ async function startApp(extraEnv = {}) {
   const t = await createTempDb();
   temps.push(t);
   const app = await createServerApplication({
-    ECHO_REWIND_TEST: "1",
+    GALLEY_TEST: "1",
     GALLEY_TEST_DB_PATH: t.dbPath,
     HOST: "127.0.0.1",
     PORT: "0",
@@ -145,10 +145,10 @@ describe("resolveConfig — GALLEY_DB_PATH (T4 A1)", () => {
 
   it("still requires GALLEY_TEST_DB_PATH in test mode and ignores GALLEY_DB_PATH", () => {
     expect(() =>
-      resolveConfig({ ECHO_REWIND_TEST: "1", GALLEY_DB_PATH: "/srv/should-be-ignored.db" }),
+      resolveConfig({ GALLEY_TEST: "1", GALLEY_DB_PATH: "/srv/should-be-ignored.db" }),
     ).toThrow(/GALLEY_TEST_DB_PATH/i);
     const cfg = resolveConfig({
-      ECHO_REWIND_TEST: "1",
+      GALLEY_TEST: "1",
       GALLEY_TEST_DB_PATH: "/tmp/explicit.db",
       GALLEY_DB_PATH: "/srv/should-be-ignored.db",
     });
@@ -163,13 +163,13 @@ describe("resolveConfig — static client and trust-proxy defaults", () => {
   });
 
   it("leaves staticDir null in test mode so the e2e stack is untouched", () => {
-    const cfg = resolveConfig({ ECHO_REWIND_TEST: "1", GALLEY_TEST_DB_PATH: "/tmp/x.db" });
+    const cfg = resolveConfig({ GALLEY_TEST: "1", GALLEY_TEST_DB_PATH: "/tmp/x.db" });
     expect(cfg.staticDir).toBeNull();
   });
 
   it("honours an explicit GALLEY_STATIC_DIR, including in test mode", () => {
     const cfg = resolveConfig({
-      ECHO_REWIND_TEST: "1",
+      GALLEY_TEST: "1",
       GALLEY_TEST_DB_PATH: "/tmp/x.db",
       GALLEY_STATIC_DIR: "/srv/client",
     });

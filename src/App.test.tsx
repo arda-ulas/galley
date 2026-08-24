@@ -29,11 +29,17 @@ describe("App — root path renders the local draft", () => {
     // …but no post-share or forbidden wording before the gesture.
     expect(screen.queryByText(/Connecting|Shared|Saving|Saved|Reconnecting/)).toBeNull();
     expect(screen.queryByText("Copy link")).toBeNull();
+    // `echo://` is the RETIRED prototype's room-address aria-label, named here
+    // deliberately: this guard is only meaningful against the literal string it
+    // asserts is absent. Not a current product name — see D-026.
     expect(screen.queryByLabelText(/echo:\/\//)).toBeNull();
   });
 
   it("does not write a prototype identity to sessionStorage", () => {
     render(<App />);
+    // Likewise the RETIRED prototype's sessionStorage key, quoted verbatim so
+    // the guard fails if that key is ever written again. Galley writes no
+    // browser-storage key at all.
     expect(sessionStorage.getItem("echo-rewind:identity")).toBeNull();
   });
 

@@ -1,4 +1,4 @@
-# Echo/Rewind — Codex Instructions
+# Galley — Codex Instructions
 
 ## Canonical source of truth
 

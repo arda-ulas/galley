@@ -30,9 +30,10 @@ type DraftShellProps = {
  * Minimum truthful Paper shell (M4 S6). Row 1 carries the editable (or read-only)
  * title, the language control, the welded state phrase, and a trailing Share
  * slot; an optional sub-bar under it carries the post-share access truth and the
- * edit link. It renders NO presence, versions, timeline, or `echo://` chrome —
- * those belong to later milestones. This is the design foundation, not the M11
- * convergence.
+ * edit link. It renders NO presence, versions, timeline, or room-address chrome
+ * — presence and versions belong to later milestones; the timeline and the
+ * room-address bar are retired with the prototype. This is the design
+ * foundation, not the M11 convergence.
  */
 export function DraftShell({
   title,

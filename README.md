@@ -7,10 +7,6 @@ reconstruction is building a focused shared coding surface (closer to a
 collaborative code sheet than a full IDE), with version history planned as a
 quiet recovery surface rather than the centrepiece.
 
-> The repository slug is `echo-rewind`, the name of the retired timeline-first
-> product this branch reconstructs away from. It is kept for history — the
-> product is **Galley**, and `docs/PRODUCT_BRIEF.md` governs.
-
 ![Galley's local draft: syntax-highlighted TypeScript, an editable title and language selector, the status text "Local draft — not uploaded", and Download and Share controls.](docs/screenshots/current/01-local-draft.png)
 
 *A local draft. The screenshot shows the local, not-uploaded UI state; that no
